@@ -11,6 +11,12 @@
 
 核心设计文档位于 `docs/`。
 
+Phase 6 MVP 收尾验收指南见：
+
+```text
+docs/MVP_ACCEPTANCE_GUIDE.md
+```
+
 ## 项目结构
 
 ```text

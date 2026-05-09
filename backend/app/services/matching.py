@@ -33,7 +33,7 @@ async def _generate_with_ai(job: Job, candidate: Candidate) -> dict[str, Any]:
             "content": (
                 "你是招聘初筛助手。请只基于岗位相关能力分析候选人与岗位的匹配度。"
                 "不要使用性别、婚育、民族等敏感信息作为判断依据。"
-                "不确定内容请标为待确认。"
+                "不确定的内容请标为待确认。"
             ),
         },
         {
@@ -62,8 +62,7 @@ def _fallback_match(job: Job, candidate: Candidate, reason: str) -> CandidateMat
     must_have_text = " ".join(job.must_have or [])
     skills = candidate.skills or []
     matched_skills = [skill for skill in skills if skill.lower() in must_have_text.lower()]
-    base = 45
-    score = base + min(35, len(matched_skills) * 10)
+    score = 45 + min(35, len(matched_skills) * 10)
     if candidate.years_of_experience is not None:
         score += min(10, candidate.years_of_experience * 2)
     if candidate.highest_education:

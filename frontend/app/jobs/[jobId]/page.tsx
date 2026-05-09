@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ListFilter, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, ListFilter, Loader2, RefreshCw, Upload } from "lucide-react";
 
 import { closeJob, getJob, Job } from "@/lib/api";
 
@@ -67,7 +67,11 @@ export default function JobDetailPage() {
 
         {error ? (
           <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
+            <div>{error}</div>
+            <button onClick={() => void loadJob()} className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-xs font-medium">
+              <RefreshCw className="h-3.5 w-3.5" />
+              重试
+            </button>
           </div>
         ) : null}
 
@@ -87,10 +91,10 @@ export default function JobDetailPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {job.department || "未填写部门"} · {job.location || "未填写地点"} · 更新于 {formatDate(job.updated_at)}
+                  {job.department || "未填写部门"} / {job.location || "未填写地点"} / 更新于 {formatDate(job.updated_at)}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Link
                   href={`/jobs/${job.id}/resumes/upload`}
                   className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"

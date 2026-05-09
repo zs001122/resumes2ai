@@ -59,7 +59,15 @@ export default function CandidateDetailPage() {
           返回候选人列表
         </Link>
 
-        {error ? <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
+        {error ? (
+          <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div>{error}</div>
+            <button onClick={() => void loadDetail()} className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-xs font-medium">
+              <RefreshCw className="h-3.5 w-3.5" />
+              重试
+            </button>
+          </div>
+        ) : null}
 
         {loading || !detail ? (
           <div className="mt-6 flex items-center gap-2 rounded-lg border border-border bg-background p-8 text-sm text-muted-foreground">
@@ -72,7 +80,7 @@ export default function CandidateDetailPage() {
               <div>
                 <h1 className="text-2xl font-semibold">{detail.candidate.name || "姓名待确认"}</h1>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {detail.candidate.current_title || "岗位待确认"} · {detail.candidate.city || "城市待确认"} · {detail.candidate.phone || "手机号待确认"}
+                  {detail.candidate.current_title || "岗位待确认"} / {detail.candidate.city || "城市待确认"} / {detail.candidate.phone || "手机号待确认"}
                 </p>
               </div>
               <Link
@@ -110,7 +118,17 @@ export default function CandidateDetailPage() {
                       <List title="面试问题" items={match.interview_questions} />
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">暂无匹配结果</p>
+                    <div className="text-sm text-muted-foreground">
+                      <p>暂无匹配结果。</p>
+                      <button
+                        onClick={() => void handleRematch()}
+                        disabled={matching}
+                        className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium disabled:opacity-60"
+                      >
+                        {matching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        立即评分
+                      </button>
+                    </div>
                   )}
                 </Panel>
 

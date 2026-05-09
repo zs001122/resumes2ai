@@ -83,6 +83,11 @@ export default function CandidateReviewPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form) return;
+    const years = form.years_of_experience.trim();
+    if (years && Number.isNaN(Number(years))) {
+      setError("工作年限必须是数字");
+      return;
+    }
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -94,7 +99,7 @@ export default function CandidateReviewPage() {
         city: form.city || null,
         current_company: form.current_company || null,
         current_title: form.current_title || null,
-        years_of_experience: form.years_of_experience ? Number(form.years_of_experience) : null,
+        years_of_experience: years ? Number(years) : null,
         highest_education: form.highest_education || null,
         skills: form.skills
           .split("\n")
@@ -127,19 +132,19 @@ export default function CandidateReviewPage() {
   return (
     <main className="min-h-screen bg-muted px-6 py-8">
       <section className="mx-auto max-w-7xl">
-        <Link href={`/jobs/${params.jobId}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        <Link href={`/jobs/${params.jobId}/candidates/${params.candidateId}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground">
           <ArrowLeft className="h-4 w-4" />
-          返回岗位详情
+          返回候选人详情
         </Link>
 
         <div className="mt-5">
           <h1 className="text-2xl font-semibold">解析结果修正</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            左侧修正结构化字段，右侧对照原简历抽取文本。字段定位和高亮属于下一步增强。
+            左侧修正结构化字段，右侧对照原简历抽取文本。保存后可重新触发匹配评分。
           </p>
         </div>
 
-        {error ? <Notice tone="error" text={error} /> : null}
+        {error ? <Notice tone="error" text={error} onRetry={() => void loadData()} /> : null}
         {message ? <Notice tone="success" text={message} /> : null}
 
         {loading || !data || !form ? (
@@ -185,7 +190,7 @@ export default function CandidateReviewPage() {
                   <div>
                     <h3 className="text-sm font-semibold">匹配评分</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {match ? `${match.score} 分 · ${match.level}` : "暂无评分"}
+                      {match ? `${match.score} 分 / ${match.level}` : "暂无评分"}
                     </p>
                   </div>
                   <button
@@ -234,7 +239,7 @@ export default function CandidateReviewPage() {
                   <div className="mt-3 space-y-2">
                     {data.correction_logs.slice(0, 8).map((log) => (
                       <div key={log.id} className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-                        {log.field_name}：{log.old_value || "空"} → {log.new_value || "空"}
+                        {log.field_name}: {log.old_value || "空"} {"->"} {log.new_value || "空"}
                       </div>
                     ))}
                   </div>
@@ -267,10 +272,28 @@ function Field({
   );
 }
 
-function Notice({ text, tone }: { text: string; tone: "error" | "success" }) {
+function Notice({
+  text,
+  tone,
+  onRetry,
+}: {
+  text: string;
+  tone: "error" | "success";
+  onRetry?: () => void;
+}) {
   const className =
     tone === "error"
       ? "border-red-200 bg-red-50 text-red-700"
       : "border-green-200 bg-green-50 text-green-700";
-  return <div className={`mt-5 rounded-lg border p-4 text-sm ${className}`}>{text}</div>;
+  return (
+    <div className={`mt-5 rounded-lg border p-4 text-sm ${className}`}>
+      <div>{text}</div>
+      {onRetry ? (
+        <button onClick={onRetry} className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-xs font-medium">
+          <RefreshCw className="h-3.5 w-3.5" />
+          重试
+        </button>
+      ) : null}
+    </div>
+  );
 }

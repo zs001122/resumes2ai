@@ -5,12 +5,13 @@ import { useParams } from "next/navigation";
 import { ChangeEvent, useState } from "react";
 import { ArrowLeft, FileText, Loader2, PencilLine, Upload } from "lucide-react";
 
-import { ResumeUploadResult, uploadResume } from "@/lib/api";
+import { ResumeUploadResult, retryParseResume, uploadResume } from "@/lib/api";
 
 export default function ResumeUploadPage() {
   const params = useParams<{ jobId: string }>();
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [results, setResults] = useState<ResumeUploadResult[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +35,21 @@ export default function ResumeUploadPage() {
       setResults(nextResults);
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleRetryParse(resumeFileId: string) {
+    setRetryingId(resumeFileId);
+    setError(null);
+    try {
+      const retried = await retryParseResume(resumeFileId);
+      setResults((current) =>
+        current.map((item) => (item.resume_file.id === resumeFileId ? retried : item)),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重新解析失败");
+    } finally {
+      setRetryingId(null);
     }
   }
 
@@ -62,7 +78,7 @@ export default function ResumeUploadPage() {
           <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted px-6 text-center">
             <Upload className="h-8 w-8 text-muted-foreground" />
             <span className="mt-3 text-sm font-medium">选择简历文件</span>
-            <span className="mt-1 text-xs text-muted-foreground">支持多选，单个文件会立即进入解析队列</span>
+            <span className="mt-1 text-xs text-muted-foreground">支持多选，单个文件不超过 10MB</span>
             <input
               type="file"
               multiple
@@ -128,7 +144,20 @@ export default function ResumeUploadPage() {
                         <PencilLine className="h-3.5 w-3.5" />
                         对照原简历修正
                       </Link>
-                    ) : null}
+                    ) : (
+                      <button
+                        onClick={() => void handleRetryParse(result.resume_file.id)}
+                        disabled={retryingId === result.resume_file.id}
+                        className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium disabled:opacity-60"
+                      >
+                        {retryingId === result.resume_file.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <PencilLine className="h-3.5 w-3.5" />
+                        )}
+                        重新解析
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

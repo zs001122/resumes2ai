@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, Upload } from "lucide-react";
 
 import {
   CandidateListItem,
@@ -20,9 +20,7 @@ const statusOptions: Array<{ value: CandidateStatusValue; label: string }> = [
   { value: "archived", label: "已入库" },
 ];
 
-function statusLabel(value?: string | null) {
-  return statusOptions.find((item) => item.value === value)?.label ?? "待筛选";
-}
+const levelOptions = ["强推荐", "可沟通", "可考虑", "备选", "谨慎", "不推荐"];
 
 export default function CandidatesPage() {
   const params = useParams<{ jobId: string }>();
@@ -31,6 +29,7 @@ export default function CandidatesPage() {
   const [levelFilter, setLevelFilter] = useState("");
   const [minScore, setMinScore] = useState("");
   const [loading, setLoading] = useState(true);
+  const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadCandidates() {
@@ -52,8 +51,16 @@ export default function CandidatesPage() {
   }
 
   async function changeStatus(candidateId: string, value: CandidateStatusValue) {
-    await updateCandidateStatus(params.jobId, candidateId, value);
-    await loadCandidates();
+    setStatusSavingId(candidateId);
+    setError(null);
+    try {
+      await updateCandidateStatus(params.jobId, candidateId, value);
+      await loadCandidates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "候选人状态更新失败");
+    } finally {
+      setStatusSavingId(null);
+    }
   }
 
   useEffect(() => {
@@ -75,13 +82,22 @@ export default function CandidatesPage() {
             <h1 className="text-2xl font-semibold">候选人列表</h1>
             <p className="mt-2 text-sm text-muted-foreground">按匹配分排序，筛选并推进初筛状态。</p>
           </div>
-          <button
-            onClick={() => void loadCandidates()}
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium"
-          >
-            <RefreshCw className="h-4 w-4" />
-            刷新
-          </button>
+          <div className="flex gap-2">
+            <Link
+              href={`/jobs/${params.jobId}/resumes/upload`}
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+            >
+              <Upload className="h-4 w-4" />
+              上传简历
+            </Link>
+            <button
+              onClick={() => void loadCandidates()}
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium"
+            >
+              <RefreshCw className="h-4 w-4" />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 grid gap-3 rounded-lg border border-border bg-background p-4 md:grid-cols-4">
@@ -93,17 +109,31 @@ export default function CandidatesPage() {
           </select>
           <select className="input" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
             <option value="">全部推荐等级</option>
-            {["强推荐", "可沟通", "可考虑", "备选", "谨慎", "不推荐"].map((item) => (
+            {levelOptions.map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </select>
-          <input className="input" placeholder="最低匹配分" value={minScore} onChange={(e) => setMinScore(e.target.value)} />
+          <input
+            className="input"
+            inputMode="numeric"
+            placeholder="最低匹配分"
+            value={minScore}
+            onChange={(e) => setMinScore(e.target.value.replace(/[^\d.]/g, ""))}
+          />
           <button onClick={() => void loadCandidates()} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
             应用筛选
           </button>
         </div>
 
-        {error ? <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
+        {error ? (
+          <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div>{error}</div>
+            <button onClick={() => void loadCandidates()} className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-xs font-medium">
+              <RefreshCw className="h-3.5 w-3.5" />
+              重试
+            </button>
+          </div>
+        ) : null}
 
         <div className="mt-6 overflow-hidden rounded-lg border border-border bg-background">
           <div className="grid grid-cols-[1.1fr_0.8fr_0.7fr_0.7fr_0.9fr_0.9fr] border-b border-border px-4 py-3 text-xs font-medium text-muted-foreground">
@@ -135,6 +165,7 @@ export default function CandidatesPage() {
                   <span className="text-muted-foreground">{item.match?.level ?? "未评分"}</span>
                   <select
                     className="input"
+                    disabled={statusSavingId === item.candidate.id}
                     value={item.status?.status ?? "pending"}
                     onChange={(event) => void changeStatus(item.candidate.id, event.target.value as CandidateStatusValue)}
                   >
@@ -149,7 +180,9 @@ export default function CandidatesPage() {
               ))}
             </div>
           ) : (
-            <div className="p-8 text-sm text-muted-foreground">暂无候选人。请先上传简历。</div>
+            <div className="p-8 text-sm text-muted-foreground">
+              暂无候选人。请先上传简历，系统完成解析和评分后会显示在这里。
+            </div>
           )}
         </div>
       </section>

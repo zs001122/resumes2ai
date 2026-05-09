@@ -183,7 +183,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || `API request failed: ${response.status}`);
+    throw new Error(normalizeApiError(errorText, `API request failed: ${response.status}`));
   }
 
   return response.json() as Promise<T>;
@@ -241,10 +241,16 @@ export async function uploadResume(jobId: string, file: File) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || `Upload failed: ${response.status}`);
+    throw new Error(normalizeApiError(errorText, `Upload failed: ${response.status}`));
   }
 
   return response.json() as Promise<ResumeUploadResult>;
+}
+
+export async function retryParseResume(resumeFileId: string) {
+  return requestJson<ResumeUploadResult>(`/api/resume-files/${resumeFileId}/parse`, {
+    method: "POST",
+  });
 }
 
 export async function getCandidateReviewData(jobId: string, candidateId: string) {
@@ -293,4 +299,25 @@ export async function updateCandidateStatus(
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
+}
+
+function normalizeApiError(raw: string, fallback: string) {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as { detail?: unknown };
+    if (typeof parsed.detail === "string") return parsed.detail;
+    if (Array.isArray(parsed.detail)) {
+      return parsed.detail
+        .map((item) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object" && "msg" in item) return String(item.msg);
+          return "";
+        })
+        .filter(Boolean)
+        .join("；") || fallback;
+    }
+  } catch {
+    return raw;
+  }
+  return raw;
 }
