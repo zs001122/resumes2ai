@@ -9,12 +9,20 @@ cd backend
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -e .[dev]
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8010
 ```
 
 健康检查：
 
 ```text
-GET http://localhost:8000/health
-GET http://localhost:8000/api/health
+GET http://localhost:8010/health
+GET http://localhost:8010/api/health
+```
+
+## 数据库迁移
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+alembic upgrade head
 ```

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
+from app.api.jobs import router as jobs_router
 from app.core.config import settings
 from app.core.runtime import ensure_runtime_dirs
 
@@ -21,6 +22,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(health_router, prefix="/api")
+    app.include_router(jobs_router, prefix="/api")
 
     return app
 
