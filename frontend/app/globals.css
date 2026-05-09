@@ -3,13 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 22% 12%;
-  --muted: 210 20% 96%;
-  --muted-foreground: 215 14% 42%;
-  --primary: 210 85% 28%;
+  --background: 210 20% 98%;
+  --foreground: 222 28% 11%;
+  --muted: 210 24% 94%;
+  --muted-foreground: 215 13% 41%;
+  --primary: 204 82% 31%;
   --primary-foreground: 0 0% 100%;
-  --border: 214 18% 88%;
+  --border: 214 20% 86%;
+  --panel: 0 0% 100%;
+  --success: 152 52% 30%;
+  --warning: 36 88% 38%;
+  --danger: 0 68% 42%;
 }
 
 * {
@@ -20,7 +24,7 @@ body {
   margin: 0;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
 .input {
@@ -37,4 +41,102 @@ body {
 .input:focus {
   border-color: hsl(var(--primary));
   box-shadow: 0 0 0 3px hsl(var(--primary) / 12%);
+}
+
+@layer components {
+  .app-shell {
+    min-height: 100vh;
+    background:
+      linear-gradient(180deg, hsl(204 34% 96%) 0%, hsl(var(--background)) 280px),
+      hsl(var(--background));
+  }
+
+  .app-sidebar {
+    border-right: 1px solid hsl(var(--border));
+    background: hsl(222 22% 12%);
+    color: hsl(210 30% 94%);
+  }
+
+  .panel {
+    border: 1px solid hsl(var(--border));
+    border-radius: 8px;
+    background: hsl(var(--panel));
+    box-shadow: 0 1px 2px hsl(222 20% 20% / 5%);
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    display: inline-flex;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 6px;
+    padding: 0 14px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  }
+
+  .btn-primary {
+    border: 1px solid hsl(var(--primary));
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .btn-secondary {
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--panel));
+    color: hsl(var(--foreground));
+  }
+
+  .btn-danger {
+    border: 1px solid hsl(var(--danger) / 24%);
+    background: hsl(var(--danger) / 8%);
+    color: hsl(var(--danger));
+  }
+
+  .btn-primary:disabled,
+  .btn-secondary:disabled,
+  .btn-danger:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+  }
+
+  .data-grid-head,
+  .data-grid-row {
+    display: grid;
+    align-items: center;
+    min-width: 860px;
+  }
+
+  .data-grid-head {
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(210 20% 97%);
+    padding: 12px 16px;
+    color: hsl(var(--muted-foreground));
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .data-grid-row {
+    padding: 14px 16px;
+    font-size: 14px;
+  }
+
+  .data-grid-row:hover {
+    background: hsl(210 20% 98%);
+  }
 }

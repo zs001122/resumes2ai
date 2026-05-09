@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, RefreshCw, Upload } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, RefreshCw, Upload } from "lucide-react";
 
+import { EmptyState, Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
   CandidateListItem,
   CandidateStatusValue,
@@ -68,39 +69,55 @@ export default function CandidatesPage() {
   }, [params.jobId]);
 
   const sorted = [...items].sort((a, b) => (b.match?.score ?? -1) - (a.match?.score ?? -1));
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      high: items.filter((item) => (item.match?.score ?? 0) >= 85).length,
+      pending: items.filter((item) => !item.status || item.status.status === "pending").length,
+    }),
+    [items],
+  );
 
   return (
-    <main className="min-h-screen bg-muted px-6 py-8">
-      <section className="mx-auto max-w-7xl">
-        <Link href={`/jobs/${params.jobId}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          返回岗位详情
-        </Link>
-
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">候选人列表</h1>
-            <p className="mt-2 text-sm text-muted-foreground">按匹配分排序，筛选并推进初筛状态。</p>
-          </div>
-          <div className="flex gap-2">
-            <Link
-              href={`/jobs/${params.jobId}/resumes/upload`}
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
-            >
-              <Upload className="h-4 w-4" />
-              上传简历
-            </Link>
-            <button
-              onClick={() => void loadCandidates()}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium"
-            >
-              <RefreshCw className="h-4 w-4" />
-              刷新
+    <WorkspaceShell
+      title="候选人筛选"
+      description="按岗位匹配分排序，结合状态筛选快速推进初筛决策。"
+      backHref={`/jobs/${params.jobId}`}
+      backLabel="返回岗位详情"
+      actions={
+        <>
+          <Link href={`/jobs/${params.jobId}/resumes/upload`} className="btn-primary">
+            <Upload className="h-4 w-4" />
+            上传简历
+          </Link>
+          <button onClick={() => void loadCandidates()} className="btn-secondary">
+            <RefreshCw className="h-4 w-4" />
+            刷新
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <Notice
+          tone="error"
+          action={
+            <button onClick={() => void loadCandidates()} className="btn-secondary h-8 text-xs">
+              重试
             </button>
-          </div>
-        </div>
+          }
+        >
+          {error}
+        </Notice>
+      ) : null}
 
-        <div className="mt-6 grid gap-3 rounded-lg border border-border bg-background p-4 md:grid-cols-4">
+      <div className="mb-5 grid gap-3 md:grid-cols-3">
+        <Stat label="候选人" value={stats.total} />
+        <Stat label="强匹配" value={stats.high} />
+        <Stat label="待筛选" value={stats.pending} />
+      </div>
+
+      <section className="panel mb-5 p-4">
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">全部状态</option>
             {statusOptions.map((item) => (
@@ -120,51 +137,43 @@ export default function CandidatesPage() {
             value={minScore}
             onChange={(e) => setMinScore(e.target.value.replace(/[^\d.]/g, ""))}
           />
-          <button onClick={() => void loadCandidates()} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
+          <button onClick={() => void loadCandidates()} className="btn-primary">
             应用筛选
           </button>
         </div>
+      </section>
 
-        {error ? (
-          <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <div>{error}</div>
-            <button onClick={() => void loadCandidates()} className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-xs font-medium">
-              <RefreshCw className="h-3.5 w-3.5" />
-              重试
-            </button>
+      <section className="panel overflow-hidden">
+        {loading ? (
+          <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            正在加载候选人
           </div>
-        ) : null}
-
-        <div className="mt-6 overflow-hidden rounded-lg border border-border bg-background">
-          <div className="grid grid-cols-[1.1fr_0.8fr_0.7fr_0.7fr_0.9fr_0.9fr] border-b border-border px-4 py-3 text-xs font-medium text-muted-foreground">
-            <span>候选人</span>
-            <span>岗位/城市</span>
-            <span>匹配分</span>
-            <span>推荐等级</span>
-            <span>状态</span>
-            <span>操作</span>
-          </div>
-          {loading ? (
-            <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              正在加载候选人
+        ) : sorted.length ? (
+          <div className="overflow-x-auto">
+            <div className="data-grid-head grid-cols-[1.15fr_0.9fr_0.55fr_0.75fr_0.85fr_0.7fr]">
+              <span>候选人</span>
+              <span>岗位/城市</span>
+              <span>匹配分</span>
+              <span>推荐等级</span>
+              <span>状态</span>
+              <span>操作</span>
             </div>
-          ) : sorted.length ? (
             <div className="divide-y divide-border">
               {sorted.map((item) => (
-                <div key={item.candidate.id} className="grid grid-cols-[1.1fr_0.8fr_0.7fr_0.7fr_0.9fr_0.9fr] items-center px-4 py-4 text-sm">
-                  <div>
-                    <p className="font-medium">{item.candidate.name || "姓名待确认"}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{item.candidate.phone || "手机号待确认"}</p>
+                <div key={item.candidate.id} className="data-grid-row grid-cols-[1.15fr_0.9fr_0.55fr_0.75fr_0.85fr_0.7fr]">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{item.candidate.name || "姓名待确认"}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{item.candidate.phone || item.candidate.email || "联系方式待确认"}</p>
                   </div>
-                  <div className="text-muted-foreground">
-                    <p>{item.candidate.current_title || "岗位待确认"}</p>
-                    <p className="mt-1 text-xs">{item.candidate.city || "城市待确认"}</p>
+                  <div className="min-w-0 text-muted-foreground">
+                    <p className="truncate">{item.candidate.current_title || "岗位待确认"}</p>
+                    <p className="mt-1 truncate text-xs">{item.candidate.city || "城市待确认"}</p>
                   </div>
                   <span className="font-semibold">{item.match?.score ?? "-"}</span>
                   <span className="text-muted-foreground">{item.match?.level ?? "未评分"}</span>
                   <select
-                    className="input"
+                    className="input h-9 py-1"
                     disabled={statusSavingId === item.candidate.id}
                     value={item.status?.status ?? "pending"}
                     onChange={(event) => void changeStatus(item.candidate.id, event.target.value as CandidateStatusValue)}
@@ -173,19 +182,36 @@ export default function CandidatesPage() {
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
-                  <Link className="text-sm font-medium text-primary" href={`/jobs/${params.jobId}/candidates/${item.candidate.id}`}>
+                  <Link className="text-sm font-semibold text-primary" href={`/jobs/${params.jobId}/candidates/${item.candidate.id}`}>
                     查看详情
                   </Link>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="p-8 text-sm text-muted-foreground">
-              暂无候选人。请先上传简历，系统完成解析和评分后会显示在这里。
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="p-5">
+            <EmptyState
+              title="暂无候选人"
+              description="上传简历并完成解析后，候选人会按匹配分显示在这里。"
+              action={
+                <Link href={`/jobs/${params.jobId}/resumes/upload`} className="btn-primary">
+                  上传简历
+                </Link>
+              }
+            />
+          </div>
+        )}
       </section>
-    </main>
+    </WorkspaceShell>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="panel px-4 py-3">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold">{value}</p>
+    </div>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { BriefcaseBusiness, Loader2, MapPin, Plus, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BriefcaseBusiness, Loader2, Plus, RefreshCw } from "lucide-react";
 
+import { EmptyState, Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import { JobListItem, listJobs } from "@/lib/api";
 
 function statusLabel(status: JobListItem["status"]) {
@@ -39,87 +40,119 @@ export default function JobsPage() {
     void loadJobs();
   }, []);
 
+  const stats = useMemo(
+    () => ({
+      total: jobs.length,
+      open: jobs.filter((job) => job.status === "open").length,
+      candidates: jobs.reduce((sum, job) => sum + job.candidate_count, 0),
+      high: jobs.reduce((sum, job) => sum + job.high_match_count, 0),
+    }),
+    [jobs],
+  );
+
   return (
-    <main className="min-h-screen bg-muted px-6 py-8">
-      <section className="mx-auto max-w-6xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">岗位列表</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              创建岗位、确认筛选标准，并从这里进入候选人筛选流程。
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => void loadJobs()}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium"
-            >
-              <RefreshCw className="h-4 w-4" />
-              刷新
+    <WorkspaceShell
+      title="岗位工作台"
+      description="从岗位开始组织筛选流程，快速查看每个岗位的候选人数量、强匹配数量和待处理情况。"
+      actions={
+        <>
+          <button onClick={() => void loadJobs()} className="btn-secondary">
+            <RefreshCw className="h-4 w-4" />
+            刷新
+          </button>
+          <Link href="/jobs/new" className="btn-primary">
+            <Plus className="h-4 w-4" />
+            创建岗位
+          </Link>
+        </>
+      }
+    >
+      {error ? (
+        <Notice
+          tone="error"
+          action={
+            <button onClick={() => void loadJobs()} className="btn-secondary h-8 text-xs">
+              重试
             </button>
-            <Link
-              href="/jobs/new"
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
-            >
-              <Plus className="h-4 w-4" />
-              创建岗位
-            </Link>
-          </div>
+          }
+        >
+          {error}
+        </Notice>
+      ) : null}
+
+      <div className="mb-5 grid gap-3 md:grid-cols-4">
+        <Stat label="岗位总数" value={stats.total} />
+        <Stat label="开放中" value={stats.open} />
+        <Stat label="候选人" value={stats.candidates} />
+        <Stat label="强匹配" value={stats.high} />
+      </div>
+
+      <section className="panel overflow-hidden">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-base font-semibold">岗位列表</h2>
         </div>
-
-        {error ? (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            加载失败：{error}
+        {loading ? (
+          <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            正在加载岗位
           </div>
-        ) : null}
-
-        <div className="mt-6 overflow-hidden rounded-lg border border-border bg-background">
-          <div className="grid grid-cols-[1.4fr_1fr_1fr_0.7fr_0.8fr] border-b border-border px-4 py-3 text-xs font-medium text-muted-foreground">
-            <span>岗位</span>
-            <span>部门</span>
-            <span>地点</span>
-            <span>状态</span>
-            <span>创建时间</span>
+        ) : jobs.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              title="暂无岗位"
+              description="先创建一个岗位，确认筛选标准后再上传简历。"
+              action={
+                <Link href="/jobs/new" className="btn-primary">
+                  创建岗位
+                </Link>
+              }
+            />
           </div>
-
-          {loading ? (
-            <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              正在加载岗位
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="data-grid-head grid-cols-[1.4fr_0.8fr_0.8fr_0.7fr_0.7fr_0.7fr_0.8fr]">
+              <span>岗位</span>
+              <span>部门</span>
+              <span>地点</span>
+              <span>候选人</span>
+              <span>强匹配</span>
+              <span>状态</span>
+              <span>创建时间</span>
             </div>
-          ) : jobs.length === 0 ? (
-            <div className="p-8 text-sm text-muted-foreground">
-              暂无岗位。先创建一个岗位，再上传简历进行筛选。
-            </div>
-          ) : (
             <div className="divide-y divide-border">
               {jobs.map((job) => (
                 <Link
                   key={job.id}
                   href={`/jobs/${job.id}`}
-                  className="grid grid-cols-[1.4fr_1fr_1fr_0.7fr_0.8fr] items-center px-4 py-4 text-sm transition hover:bg-muted"
+                  className="data-grid-row grid-cols-[1.4fr_0.8fr_0.8fr_0.7fr_0.7fr_0.7fr_0.8fr]"
                 >
-                  <span className="flex items-center gap-2 font-medium">
-                    <BriefcaseBusiness className="h-4 w-4 text-muted-foreground" />
-                    {job.title}
+                  <span className="flex min-w-0 items-center gap-2 font-medium">
+                    <BriefcaseBusiness className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{job.title}</span>
                   </span>
                   <span className="text-muted-foreground">{job.department || "未填写"}</span>
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5" />
-                    {job.location || "未填写"}
-                  </span>
+                  <span className="text-muted-foreground">{job.location || "未填写"}</span>
+                  <span>{job.candidate_count}</span>
+                  <span>{job.high_match_count}</span>
                   <span>
-                    <span className="rounded-full bg-muted px-2 py-1 text-xs">
-                      {statusLabel(job.status)}
-                    </span>
+                    <span className="status-pill">{statusLabel(job.status)}</span>
                   </span>
                   <span className="text-muted-foreground">{formatDate(job.created_at)}</span>
                 </Link>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </section>
-    </main>
+    </WorkspaceShell>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="panel px-4 py-3">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold">{value}</p>
+    </div>
   );
 }

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ChangeEvent, useState } from "react";
-import { ArrowLeft, FileText, Loader2, PencilLine, Upload } from "lucide-react";
+import { ChangeEvent, useMemo, useState } from "react";
+import { CheckCircle2, FileText, Loader2, PencilLine, RefreshCw, Upload } from "lucide-react";
 
+import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import { ResumeUploadResult, retryParseResume, uploadResume } from "@/lib/api";
 
 export default function ResumeUploadPage() {
@@ -22,6 +23,10 @@ export default function ResumeUploadPage() {
   }
 
   async function handleUpload() {
+    if (!files.length) {
+      setError("请先选择简历文件");
+      return;
+    }
     setError(null);
     setUploading(true);
     const nextResults: ResumeUploadResult[] = [];
@@ -53,32 +58,35 @@ export default function ResumeUploadPage() {
     }
   }
 
+  const summary = useMemo(
+    () => ({
+      total: results.length,
+      success: results.filter((item) => item.resume_file.parse_status === "success").length,
+      failed: results.filter((item) => item.resume_file.parse_status === "failed").length,
+    }),
+    [results],
+  );
+
   return (
-    <main className="min-h-screen bg-muted px-6 py-8">
-      <section className="mx-auto max-w-6xl">
-        <Link href={`/jobs/${params.jobId}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          返回岗位详情
+    <WorkspaceShell
+      title="上传简历"
+      description="支持 PDF、DOCX、TXT。文件上传后会立即抽取文本、结构化字段并尝试生成匹配评分。"
+      backHref={`/jobs/${params.jobId}`}
+      backLabel="返回岗位详情"
+      actions={
+        <Link href={`/jobs/${params.jobId}/candidates`} className="btn-secondary">
+          查看候选人
         </Link>
+      }
+    >
+      {error ? <Notice tone="error">{error}</Notice> : null}
 
-        <div className="mt-5">
-          <h1 className="text-2xl font-semibold">上传简历</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            MVP 支持 PDF、DOCX、TXT。老版 DOC 和图片简历暂不进入第一版解析范围。
-          </p>
-        </div>
-
-        {error ? (
-          <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
-
-        <div className="mt-6 rounded-lg border border-border bg-background p-6">
-          <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted px-6 text-center">
-            <Upload className="h-8 w-8 text-muted-foreground" />
-            <span className="mt-3 text-sm font-medium">选择简历文件</span>
-            <span className="mt-1 text-xs text-muted-foreground">支持多选，单个文件不超过 10MB</span>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="panel p-5">
+          <label className="flex min-h-60 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/70 px-6 text-center transition hover:border-primary hover:bg-primary/5">
+            <Upload className="h-10 w-10 text-primary" />
+            <span className="mt-3 text-base font-semibold">选择简历文件</span>
+            <span className="mt-1 text-sm text-muted-foreground">支持多选，单个文件不超过 10MB</span>
             <input
               type="file"
               multiple
@@ -90,81 +98,102 @@ export default function ResumeUploadPage() {
 
           {files.length ? (
             <div className="mt-5">
-              <h2 className="text-sm font-semibold">待上传文件</h2>
-              <div className="mt-3 divide-y divide-border rounded-lg border border-border">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-semibold">待上传文件</h2>
+                <button onClick={() => void handleUpload()} disabled={uploading} className="btn-primary">
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  开始上传
+                </button>
+              </div>
+              <div className="divide-y divide-border rounded-md border border-border">
                 {files.map((file) => (
                   <div key={`${file.name}-${file.size}`} className="flex items-center gap-3 px-4 py-3 text-sm">
                     <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="flex-1 truncate">{file.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{file.name}</span>
                     <span className="text-xs text-muted-foreground">{Math.ceil(file.size / 1024)} KB</span>
                   </div>
                 ))}
               </div>
-              <button
-                onClick={() => void handleUpload()}
-                disabled={uploading}
-                className="mt-4 inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60"
-              >
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                开始上传并解析
-              </button>
             </div>
           ) : null}
-        </div>
+        </section>
 
-        {results.length ? (
-          <div className="mt-6 rounded-lg border border-border bg-background">
-            <div className="border-b border-border px-5 py-4">
-              <h2 className="text-base font-semibold">解析结果</h2>
+        <aside className="space-y-5">
+          <section className="panel p-5">
+            <h2 className="text-base font-semibold">解析进度</h2>
+            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+              <Summary label="总数" value={summary.total} />
+              <Summary label="成功" value={summary.success} />
+              <Summary label="失败" value={summary.failed} />
+            </div>
+          </section>
+          <section className="panel p-5 text-sm leading-6 text-muted-foreground">
+            <h2 className="text-base font-semibold text-foreground">上传范围</h2>
+            <p className="mt-3">MVP 暂不支持老版 DOC、图片简历和 ZIP 包。解析失败时可以在结果区重新解析。</p>
+          </section>
+        </aside>
+      </div>
+
+      {results.length ? (
+        <section className="panel mt-5 overflow-hidden">
+          <div className="border-b border-border px-5 py-4">
+            <h2 className="text-base font-semibold">解析结果</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="data-grid-head grid-cols-[1.4fr_0.7fr_0.8fr_0.8fr_0.9fr]">
+              <span>文件</span>
+              <span>状态</span>
+              <span>姓名</span>
+              <span>手机号</span>
+              <span>操作</span>
             </div>
             <div className="divide-y divide-border">
               {results.map((result) => (
-                <div key={result.resume_file.id} className="grid gap-3 px-5 py-4 text-sm md:grid-cols-[1.3fr_0.7fr_1fr_1fr]">
-                  <div>
-                    <p className="font-medium">{result.resume_file.file_name}</p>
+                <div key={result.resume_file.id} className="data-grid-row grid-cols-[1.4fr_0.7fr_0.8fr_0.8fr_0.9fr]">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{result.resume_file.file_name}</p>
                     {result.resume_file.parse_error ? (
-                      <p className="mt-1 text-xs text-red-600">{result.resume_file.parse_error}</p>
+                      <p className="mt-1 truncate text-xs text-red-600">{result.resume_file.parse_error}</p>
                     ) : null}
                   </div>
-                  <span className="text-muted-foreground">
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    {result.resume_file.parse_status === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
                     {result.resume_file.parse_status === "success" ? "解析成功" : "解析失败"}
                   </span>
-                  <span className="text-muted-foreground">
-                    {result.candidate?.name || "姓名待确认"}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {result.candidate?.phone || "手机号待确认"}
-                  </span>
-                  <div className="md:col-span-4">
+                  <span className="text-muted-foreground">{result.candidate?.name || "待确认"}</span>
+                  <span className="text-muted-foreground">{result.candidate?.phone || "待确认"}</span>
+                  <span>
                     {result.candidate ? (
-                      <Link
-                        href={`/jobs/${params.jobId}/candidates/${result.candidate.id}/review`}
-                        className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium"
-                      >
+                      <Link href={`/jobs/${params.jobId}/candidates/${result.candidate.id}/review`} className="btn-secondary h-9 text-xs">
                         <PencilLine className="h-3.5 w-3.5" />
-                        对照原简历修正
+                        修正
                       </Link>
                     ) : (
                       <button
                         onClick={() => void handleRetryParse(result.resume_file.id)}
                         disabled={retryingId === result.resume_file.id}
-                        className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium disabled:opacity-60"
+                        className="btn-secondary h-9 text-xs"
                       >
-                        {retryingId === result.resume_file.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <PencilLine className="h-3.5 w-3.5" />
-                        )}
+                        {retryingId === result.resume_file.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                         重新解析
                       </button>
                     )}
-                  </div>
+                  </span>
                 </div>
               ))}
             </div>
           </div>
-        ) : null}
-      </section>
-    </main>
+        </section>
+      ) : null}
+    </WorkspaceShell>
+  );
+}
+
+function Summary({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md bg-muted px-3 py-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold">{value}</p>
+    </div>
   );
 }
