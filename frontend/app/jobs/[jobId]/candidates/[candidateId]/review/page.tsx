@@ -3,9 +3,16 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, Save } from "lucide-react";
 
-import { CandidateReviewData, getCandidateReviewData, updateCandidate } from "@/lib/api";
+import {
+  CandidateMatch,
+  CandidateReviewData,
+  createCandidateMatch,
+  getCandidateMatch,
+  getCandidateReviewData,
+  updateCandidate,
+} from "@/lib/api";
 
 type EditableForm = {
   name: string;
@@ -41,6 +48,8 @@ export default function CandidateReviewPage() {
   const [form, setForm] = useState<EditableForm | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [matching, setMatching] = useState(false);
+  const [match, setMatch] = useState<CandidateMatch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -51,6 +60,11 @@ export default function CandidateReviewPage() {
       const reviewData = await getCandidateReviewData(params.jobId, params.candidateId);
       setData(reviewData);
       setForm(toForm(reviewData));
+      try {
+        setMatch(await getCandidateMatch(params.jobId, params.candidateId));
+      } catch {
+        setMatch(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "修正数据加载失败");
     } finally {
@@ -93,6 +107,20 @@ export default function CandidateReviewPage() {
       setError(err instanceof Error ? err.message : "保存失败");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRematch() {
+    setMatching(true);
+    setError(null);
+    setMessage(null);
+    try {
+      setMatch(await createCandidateMatch(params.jobId, params.candidateId));
+      setMessage("匹配评分已更新");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重新评分失败");
+    } finally {
+      setMatching(false);
     }
   }
 
@@ -150,6 +178,29 @@ export default function CandidateReviewPage() {
                     ? data.candidate.low_confidence_fields.join("、")
                     : "暂无"}
                 </p>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-border p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">匹配评分</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {match ? `${match.score} 分 · ${match.level}` : "暂无评分"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRematch()}
+                    disabled={matching}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium disabled:opacity-60"
+                  >
+                    {matching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    重新评分
+                  </button>
+                </div>
+                {match ? (
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{match.summary}</p>
+                ) : null}
               </div>
 
               <button

@@ -97,6 +97,20 @@ export type FieldCorrectionLog = {
   created_at: string;
 };
 
+export type CandidateMatch = {
+  id: string;
+  job_id: string;
+  candidate_id: string;
+  score: number;
+  level: string;
+  summary: string;
+  matched_points: string[];
+  weak_points: string[];
+  risks: string[];
+  interview_questions: string[];
+  created_at: string;
+};
+
 export type CandidateReviewData = {
   candidate: Candidate;
   resume_file: ResumeFile;
@@ -208,4 +222,14 @@ export async function updateCandidate(candidateId: string, payload: Partial<Cand
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export async function createCandidateMatch(jobId: string, candidateId: string) {
+  return requestJson<CandidateMatch>(`/api/jobs/${jobId}/candidates/${candidateId}/match`, {
+    method: "POST",
+  });
+}
+
+export async function getCandidateMatch(jobId: string, candidateId: string) {
+  return requestJson<CandidateMatch>(`/api/jobs/${jobId}/candidates/${candidateId}/match`);
 }

@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.db.session import Base
-from app.models import candidate, correction, job, resume  # noqa: F401
+from app.models import candidate, correction, job, match, resume  # noqa: F401
 
 config = context.config
 

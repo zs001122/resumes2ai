@@ -9,6 +9,7 @@ from app.models.candidate import Candidate
 from app.models.correction import FieldCorrectionLog
 from app.models.resume import ResumeFieldExtraction, ResumeFile
 from app.repositories.jobs import JobRepository
+from app.repositories.matches import CandidateMatchRepository
 from app.repositories.resumes import ResumeRepository
 from app.schemas.resume import (
     CandidateRead,
@@ -20,6 +21,7 @@ from app.schemas.resume import (
     ResumePreview,
     ResumeUploadResult,
 )
+from app.services.matching import generate_candidate_match
 from app.services.parsers.resume_text import ResumeTextExtractor, UnsupportedResumeFileType
 from app.services.resume_parser import parse_resume_text
 from app.services.storage.local import LocalStorageService
@@ -70,7 +72,14 @@ async def upload_resume(
         )
     )
 
-    return _parse_and_save_resume(repository, resume_file, original_path)
+    result = _parse_and_save_resume(repository, resume_file, original_path)
+    if result.candidate:
+        job = JobRepository(db).get(job_id)
+        candidate = repository.get_candidate(result.candidate.id)
+        if job and candidate:
+            match_payload = await generate_candidate_match(job, candidate)
+            CandidateMatchRepository(db).create(job_id, candidate.id, match_payload)
+    return result
 
 
 @router.get("/resume-files/{resume_file_id}", response_model=ResumeFileRead)
