@@ -324,6 +324,7 @@ resumes2ai/
 - Next.js 生产构建通过。
 - Next.js 临时 dev server 首页访问通过。
 - Git 仓库已初始化，远端已配置为 `https://github.com/zs001122/resumes2ai.git`。
+- 首次项目骨架提交已推送到 GitHub `origin/main`，提交号 `61841dd`。
 
 尚未完成：
 
