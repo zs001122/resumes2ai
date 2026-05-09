@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, useState } from "react";
-import { ArrowLeft, FileText, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, PencilLine, Upload } from "lucide-react";
 
 import { ResumeUploadResult, uploadResume } from "@/lib/api";
 
@@ -119,6 +119,17 @@ export default function ResumeUploadPage() {
                   <span className="text-muted-foreground">
                     {result.candidate?.phone || "手机号待确认"}
                   </span>
+                  <div className="md:col-span-4">
+                    {result.candidate ? (
+                      <Link
+                        href={`/jobs/${params.jobId}/candidates/${result.candidate.id}/review`}
+                        className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium"
+                      >
+                        <PencilLine className="h-3.5 w-3.5" />
+                        对照原简历修正
+                      </Link>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

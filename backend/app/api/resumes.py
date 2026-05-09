@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -5,10 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.candidate import Candidate
+from app.models.correction import FieldCorrectionLog
 from app.models.resume import ResumeFieldExtraction, ResumeFile
 from app.repositories.jobs import JobRepository
 from app.repositories.resumes import ResumeRepository
 from app.schemas.resume import (
+    CandidateRead,
+    CandidateReviewData,
+    CandidateUpdate,
+    FieldCorrectionLogRead,
     ResumeFieldExtractionRead,
     ResumeFileRead,
     ResumePreview,
@@ -118,6 +124,79 @@ def list_field_extractions(
     return [ResumeFieldExtractionRead.model_validate(row) for row in rows]
 
 
+@router.get("/jobs/{job_id}/candidates/{candidate_id}/review", response_model=CandidateReviewData)
+def get_candidate_review_data(
+    job_id: str,
+    candidate_id: str,
+    db: Session = Depends(get_db),
+) -> CandidateReviewData:
+    repository = ResumeRepository(db)
+    candidate = repository.get_candidate(candidate_id)
+    resume_file = repository.get_resume_file_for_candidate(job_id, candidate_id)
+    if not candidate or not resume_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="候选人或简历不存在")
+    preview = _preview_from_resume_file(resume_file)
+    return CandidateReviewData(
+        candidate=CandidateRead.model_validate(candidate),
+        resume_file=ResumeFileRead.model_validate(resume_file),
+        preview=preview,
+        field_extractions=[
+            ResumeFieldExtractionRead.model_validate(row)
+            for row in repository.list_field_extractions(resume_file.id)
+        ],
+        correction_logs=[
+            FieldCorrectionLogRead.model_validate(row)
+            for row in repository.list_correction_logs(candidate_id)
+        ],
+    )
+
+
+@router.patch("/candidates/{candidate_id}", response_model=CandidateRead)
+def update_candidate(
+    candidate_id: str,
+    payload: CandidateUpdate,
+    db: Session = Depends(get_db),
+) -> CandidateRead:
+    repository = ResumeRepository(db)
+    candidate = repository.get_candidate(candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="候选人不存在")
+
+    resume_file_id = _latest_resume_file_id(repository, candidate_id)
+    logs: list[FieldCorrectionLog] = []
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        old_value = getattr(candidate, key)
+        if old_value == value:
+            continue
+        setattr(candidate, key, value)
+        logs.append(
+            FieldCorrectionLog(
+                candidate_id=candidate.id,
+                resume_file_id=resume_file_id,
+                field_name=key,
+                old_value=_stringify(old_value),
+                new_value=_stringify(value),
+                editor_id="local",
+            )
+        )
+
+    candidate = repository.update_candidate(candidate)
+    if logs:
+        repository.add_correction_logs(logs)
+    return CandidateRead.model_validate(candidate)
+
+
+@router.get("/candidates/{candidate_id}/correction-logs", response_model=list[FieldCorrectionLogRead])
+def list_correction_logs(
+    candidate_id: str,
+    db: Session = Depends(get_db),
+) -> list[FieldCorrectionLogRead]:
+    repository = ResumeRepository(db)
+    if not repository.get_candidate(candidate_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="候选人不存在")
+    return [FieldCorrectionLogRead.model_validate(row) for row in repository.list_correction_logs(candidate_id)]
+
+
 def _parse_and_save_resume(
     repository: ResumeRepository,
     resume_file: ResumeFile,
@@ -150,7 +229,6 @@ def _parse_and_save_resume(
                 for source in parsed_resume.field_sources
             ],
         )
-
         return ResumeUploadResult(
             resume_file=ResumeFileRead.model_validate(resume_file),
             candidate=candidate,
@@ -176,3 +254,25 @@ def _parse_and_save_resume(
             candidate=None,
             field_extractions=[],
         )
+
+
+def _preview_from_resume_file(resume_file: ResumeFile) -> ResumePreview:
+    return ResumePreview(
+        resume_file_id=resume_file.id,
+        file_name=resume_file.file_name,
+        content_type="text/plain",
+        content=resume_file.parsed_text or "暂无可预览文本",
+    )
+
+
+def _latest_resume_file_id(repository: ResumeRepository, candidate_id: str) -> str | None:
+    resume_file = repository.get_latest_resume_file_for_candidate(candidate_id)
+    return resume_file.id if resume_file else None
+
+
+def _stringify(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False)

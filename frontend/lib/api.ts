@@ -86,6 +86,30 @@ export type ResumeUploadResult = {
   field_extractions: ResumeFieldExtraction[];
 };
 
+export type FieldCorrectionLog = {
+  id: string;
+  candidate_id: string;
+  resume_file_id: string | null;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  editor_id: string | null;
+  created_at: string;
+};
+
+export type CandidateReviewData = {
+  candidate: Candidate;
+  resume_file: ResumeFile;
+  preview: {
+    resume_file_id: string;
+    file_name: string;
+    content_type: string;
+    content: string;
+  };
+  field_extractions: ResumeFieldExtraction[];
+  correction_logs: FieldCorrectionLog[];
+};
+
 export type JobListItem = {
   id: string;
   title: string;
@@ -173,4 +197,15 @@ export async function uploadResume(jobId: string, file: File) {
   }
 
   return response.json() as Promise<ResumeUploadResult>;
+}
+
+export async function getCandidateReviewData(jobId: string, candidateId: string) {
+  return requestJson<CandidateReviewData>(`/api/jobs/${jobId}/candidates/${candidateId}/review`);
+}
+
+export async function updateCandidate(candidateId: string, payload: Partial<Candidate>) {
+  return requestJson<Candidate>(`/api/candidates/${candidateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }

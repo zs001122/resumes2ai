@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.candidate import Candidate
+from app.models.correction import FieldCorrectionLog
 from app.models.resume import ResumeFieldExtraction, ResumeFile
 
 
@@ -11,6 +12,25 @@ class ResumeRepository:
 
     def get_resume_file(self, resume_file_id: str) -> ResumeFile | None:
         return self.db.get(ResumeFile, resume_file_id)
+
+    def get_candidate(self, candidate_id: str) -> Candidate | None:
+        return self.db.get(Candidate, candidate_id)
+
+    def get_resume_file_for_candidate(self, job_id: str, candidate_id: str) -> ResumeFile | None:
+        statement = (
+            select(ResumeFile)
+            .where(ResumeFile.job_id == job_id, ResumeFile.candidate_id == candidate_id)
+            .order_by(ResumeFile.created_at.desc())
+        )
+        return self.db.scalars(statement).first()
+
+    def get_latest_resume_file_for_candidate(self, candidate_id: str) -> ResumeFile | None:
+        statement = (
+            select(ResumeFile)
+            .where(ResumeFile.candidate_id == candidate_id)
+            .order_by(ResumeFile.created_at.desc())
+        )
+        return self.db.scalars(statement).first()
 
     def list_resume_files_by_job(self, job_id: str) -> list[ResumeFile]:
         statement = select(ResumeFile).where(ResumeFile.job_id == job_id).order_by(ResumeFile.created_at.desc())
@@ -53,4 +73,26 @@ class ResumeRepository:
 
     def list_field_extractions(self, resume_file_id: str) -> list[ResumeFieldExtraction]:
         statement = select(ResumeFieldExtraction).where(ResumeFieldExtraction.resume_file_id == resume_file_id)
+        return list(self.db.scalars(statement).all())
+
+    def update_candidate(self, candidate: Candidate) -> Candidate:
+        self.db.add(candidate)
+        self.db.commit()
+        self.db.refresh(candidate)
+        return candidate
+
+    def add_correction_logs(self, logs: list[FieldCorrectionLog]) -> list[FieldCorrectionLog]:
+        for log in logs:
+            self.db.add(log)
+        self.db.commit()
+        for log in logs:
+            self.db.refresh(log)
+        return logs
+
+    def list_correction_logs(self, candidate_id: str) -> list[FieldCorrectionLog]:
+        statement = (
+            select(FieldCorrectionLog)
+            .where(FieldCorrectionLog.candidate_id == candidate_id)
+            .order_by(FieldCorrectionLog.created_at.desc())
+        )
         return list(self.db.scalars(statement).all())

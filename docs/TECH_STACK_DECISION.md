@@ -334,10 +334,11 @@ resumes2ai/
 - 已新增 DeepSeek/OpenAI-compatible AI Provider，默认 `base_url` 为 `https://api.deepseek.com`，默认模型为 `deepseek-v4-flash`，可切换 `deepseek-v4-pro`。
 - 真实 key 已迁移到被 Git 忽略的 `backend/.env`，`.env.example` 保持占位符，避免误提交密钥。
 - DeepSeek Provider 已用极小 JSON 请求验证连通，返回合法 JSON。
+- Phase 3 P0 已实现原简历抽取文本对照、结构化字段修正和字段修改日志。
 
 尚未完成：
 
-- 原简历对照修正页面。
+- 原文点击定位和高亮。
 - 将 AI Provider 接入简历结构化解析任务。
 - 匹配评分业务接口。
 

@@ -24,6 +24,19 @@ class CandidateRead(BaseModel):
     updated_at: datetime
 
 
+class CandidateUpdate(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    city: str | None = None
+    current_company: str | None = None
+    current_title: str | None = None
+    years_of_experience: float | None = None
+    highest_education: str | None = None
+    skills: list[str] | None = None
+    low_confidence_fields: list[str] | None = None
+
+
 class ResumeFileRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -70,3 +83,24 @@ class ResumePreview(BaseModel):
     file_name: str
     content_type: str
     content: str
+
+
+class FieldCorrectionLogRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    candidate_id: str
+    resume_file_id: str | None
+    field_name: str
+    old_value: str | None
+    new_value: str | None
+    editor_id: str | None
+    created_at: datetime
+
+
+class CandidateReviewData(BaseModel):
+    candidate: CandidateRead
+    resume_file: ResumeFileRead
+    preview: ResumePreview
+    field_extractions: list[ResumeFieldExtractionRead]
+    correction_logs: list[FieldCorrectionLogRead]
