@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.match import CandidateMatchRead
+
 
 class CandidateRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -101,6 +103,34 @@ class FieldCorrectionLogRead(BaseModel):
 class CandidateReviewData(BaseModel):
     candidate: CandidateRead
     resume_file: ResumeFileRead
+    preview: ResumePreview
+    field_extractions: list[ResumeFieldExtractionRead]
+    correction_logs: list[FieldCorrectionLogRead]
+
+
+class CandidateStatusRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    job_id: str
+    candidate_id: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CandidateStatusUpdate(BaseModel):
+    status: str
+
+
+class CandidateListItem(BaseModel):
+    candidate: CandidateRead
+    resume_file: ResumeFileRead
+    match: CandidateMatchRead | None = None
+    status: CandidateStatusRead | None = None
+
+
+class CandidateDetail(CandidateListItem):
     preview: ResumePreview
     field_extractions: list[ResumeFieldExtractionRead]
     correction_logs: list[FieldCorrectionLogRead]

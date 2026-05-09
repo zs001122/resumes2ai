@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, ListFilter, Loader2, Upload } from "lucide-react";
 
 import { closeJob, getJob, Job } from "@/lib/api";
 
@@ -97,6 +97,13 @@ export default function JobDetailPage() {
                 >
                   <Upload className="h-4 w-4" />
                   上传简历
+                </Link>
+                <Link
+                  href={`/jobs/${job.id}/candidates`}
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium"
+                >
+                  <ListFilter className="h-4 w-4" />
+                  查看候选人
                 </Link>
                 {job.status === "open" ? (
                   <button

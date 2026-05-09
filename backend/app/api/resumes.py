@@ -12,8 +12,12 @@ from app.repositories.jobs import JobRepository
 from app.repositories.matches import CandidateMatchRepository
 from app.repositories.resumes import ResumeRepository
 from app.schemas.resume import (
+    CandidateDetail,
+    CandidateListItem,
     CandidateRead,
     CandidateReviewData,
+    CandidateStatusRead,
+    CandidateStatusUpdate,
     CandidateUpdate,
     FieldCorrectionLogRead,
     ResumeFieldExtractionRead,
@@ -30,6 +34,7 @@ router = APIRouter(tags=["resumes"])
 
 SUPPORTED_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt"}
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
+ALLOWED_CANDIDATE_STATUSES = {"pending", "favorite", "pending_contact", "rejected", "archived"}
 
 
 @router.post(
@@ -131,6 +136,85 @@ def list_field_extractions(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历文件不存在")
     rows = repository.list_field_extractions(resume_file_id)
     return [ResumeFieldExtractionRead.model_validate(row) for row in rows]
+
+
+@router.get("/jobs/{job_id}/candidates", response_model=list[CandidateListItem])
+def list_candidates(
+    job_id: str,
+    status_filter: str | None = None,
+    level: str | None = None,
+    min_score: float | None = None,
+    db: Session = Depends(get_db),
+) -> list[CandidateListItem]:
+    if not JobRepository(db).get(job_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    repository = ResumeRepository(db)
+    match_repository = CandidateMatchRepository(db)
+    items: list[CandidateListItem] = []
+    for candidate, resume_file in repository.list_candidates_by_job(job_id):
+        match = match_repository.latest(job_id, candidate.id)
+        candidate_status = repository.get_candidate_status(job_id, candidate.id)
+        if status_filter and (candidate_status.status if candidate_status else "pending") != status_filter:
+            continue
+        if level and (not match or match.level != level):
+            continue
+        if min_score is not None and (not match or match.score < min_score):
+            continue
+        items.append(
+            CandidateListItem(
+                candidate=CandidateRead.model_validate(candidate),
+                resume_file=ResumeFileRead.model_validate(resume_file),
+                match=match,
+                status=CandidateStatusRead.model_validate(candidate_status) if candidate_status else None,
+            )
+        )
+    return items
+
+
+@router.get("/jobs/{job_id}/candidates/{candidate_id}", response_model=CandidateDetail)
+def get_candidate_detail(
+    job_id: str,
+    candidate_id: str,
+    db: Session = Depends(get_db),
+) -> CandidateDetail:
+    repository = ResumeRepository(db)
+    candidate = repository.get_candidate(candidate_id)
+    resume_file = repository.get_resume_file_for_candidate(job_id, candidate_id)
+    if not candidate or not resume_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="候选人或简历不存在")
+    candidate_status = repository.get_candidate_status(job_id, candidate_id)
+    match = CandidateMatchRepository(db).latest(job_id, candidate_id)
+    return CandidateDetail(
+        candidate=CandidateRead.model_validate(candidate),
+        resume_file=ResumeFileRead.model_validate(resume_file),
+        match=match,
+        status=CandidateStatusRead.model_validate(candidate_status) if candidate_status else None,
+        preview=_preview_from_resume_file(resume_file),
+        field_extractions=[
+            ResumeFieldExtractionRead.model_validate(row)
+            for row in repository.list_field_extractions(resume_file.id)
+        ],
+        correction_logs=[
+            FieldCorrectionLogRead.model_validate(row)
+            for row in repository.list_correction_logs(candidate_id)
+        ],
+    )
+
+
+@router.patch("/jobs/{job_id}/candidates/{candidate_id}/status", response_model=CandidateStatusRead)
+def update_candidate_status(
+    job_id: str,
+    candidate_id: str,
+    payload: CandidateStatusUpdate,
+    db: Session = Depends(get_db),
+) -> CandidateStatusRead:
+    if payload.status not in ALLOWED_CANDIDATE_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不支持的候选人状态")
+    repository = ResumeRepository(db)
+    if not JobRepository(db).get(job_id) or not repository.get_candidate(candidate_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位或候选人不存在")
+    row = repository.set_candidate_status(job_id, candidate_id, payload.status)
+    return CandidateStatusRead.model_validate(row)
 
 
 @router.get("/jobs/{job_id}/candidates/{candidate_id}/review", response_model=CandidateReviewData)

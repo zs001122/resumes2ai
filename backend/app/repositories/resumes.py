@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.candidate import Candidate
 from app.models.correction import FieldCorrectionLog
 from app.models.resume import ResumeFieldExtraction, ResumeFile
+from app.models.status import CandidateJobStatus
 
 
 class ResumeRepository:
@@ -35,6 +36,15 @@ class ResumeRepository:
     def list_resume_files_by_job(self, job_id: str) -> list[ResumeFile]:
         statement = select(ResumeFile).where(ResumeFile.job_id == job_id).order_by(ResumeFile.created_at.desc())
         return list(self.db.scalars(statement).all())
+
+    def list_candidates_by_job(self, job_id: str) -> list[tuple[Candidate, ResumeFile]]:
+        statement = (
+            select(Candidate, ResumeFile)
+            .join(ResumeFile, ResumeFile.candidate_id == Candidate.id)
+            .where(ResumeFile.job_id == job_id, ResumeFile.parse_status == "success")
+            .order_by(ResumeFile.created_at.desc())
+        )
+        return list(self.db.execute(statement).all())
 
     def create_resume_file(self, resume_file: ResumeFile) -> ResumeFile:
         self.db.add(resume_file)
@@ -96,3 +106,21 @@ class ResumeRepository:
             .order_by(FieldCorrectionLog.created_at.desc())
         )
         return list(self.db.scalars(statement).all())
+
+    def get_candidate_status(self, job_id: str, candidate_id: str) -> CandidateJobStatus | None:
+        statement = select(CandidateJobStatus).where(
+            CandidateJobStatus.job_id == job_id,
+            CandidateJobStatus.candidate_id == candidate_id,
+        )
+        return self.db.scalars(statement).first()
+
+    def set_candidate_status(self, job_id: str, candidate_id: str, status: str) -> CandidateJobStatus:
+        row = self.get_candidate_status(job_id, candidate_id)
+        if row:
+            row.status = status
+        else:
+            row = CandidateJobStatus(job_id=job_id, candidate_id=candidate_id, status=status)
+            self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row

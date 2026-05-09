@@ -124,6 +124,40 @@ export type CandidateReviewData = {
   correction_logs: FieldCorrectionLog[];
 };
 
+export type CandidateStatus = {
+  id: string;
+  job_id: string;
+  candidate_id: string;
+  status: CandidateStatusValue;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CandidateStatusValue =
+  | "pending"
+  | "favorite"
+  | "pending_contact"
+  | "rejected"
+  | "archived";
+
+export type CandidateListItem = {
+  candidate: Candidate;
+  resume_file: ResumeFile;
+  match: CandidateMatch | null;
+  status: CandidateStatus | null;
+};
+
+export type CandidateDetail = CandidateListItem & {
+  preview: {
+    resume_file_id: string;
+    file_name: string;
+    content_type: string;
+    content: string;
+  };
+  field_extractions: ResumeFieldExtraction[];
+  correction_logs: FieldCorrectionLog[];
+};
+
 export type JobListItem = {
   id: string;
   title: string;
@@ -232,4 +266,31 @@ export async function createCandidateMatch(jobId: string, candidateId: string) {
 
 export async function getCandidateMatch(jobId: string, candidateId: string) {
   return requestJson<CandidateMatch>(`/api/jobs/${jobId}/candidates/${candidateId}/match`);
+}
+
+export async function listCandidates(
+  jobId: string,
+  filters?: { status?: string; level?: string; min_score?: string },
+) {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status_filter", filters.status);
+  if (filters?.level) params.set("level", filters.level);
+  if (filters?.min_score) params.set("min_score", filters.min_score);
+  const query = params.toString();
+  return requestJson<CandidateListItem[]>(`/api/jobs/${jobId}/candidates${query ? `?${query}` : ""}`);
+}
+
+export async function getCandidateDetail(jobId: string, candidateId: string) {
+  return requestJson<CandidateDetail>(`/api/jobs/${jobId}/candidates/${candidateId}`);
+}
+
+export async function updateCandidateStatus(
+  jobId: string,
+  candidateId: string,
+  status: CandidateStatusValue,
+) {
+  return requestJson<CandidateStatus>(`/api/jobs/${jobId}/candidates/${candidateId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
 }
