@@ -1,0 +1,178 @@
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.models.candidate import Candidate
+from app.models.resume import ResumeFieldExtraction, ResumeFile
+from app.repositories.jobs import JobRepository
+from app.repositories.resumes import ResumeRepository
+from app.schemas.resume import (
+    ResumeFieldExtractionRead,
+    ResumeFileRead,
+    ResumePreview,
+    ResumeUploadResult,
+)
+from app.services.parsers.resume_text import ResumeTextExtractor, UnsupportedResumeFileType
+from app.services.resume_parser import parse_resume_text
+from app.services.storage.local import LocalStorageService
+
+router = APIRouter(tags=["resumes"])
+
+SUPPORTED_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt"}
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
+
+
+@router.post(
+    "/jobs/{job_id}/resumes/upload",
+    response_model=ResumeUploadResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_resume(
+    job_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> ResumeUploadResult:
+    if not JobRepository(db).get(job_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in SUPPORTED_UPLOAD_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"暂不支持 {suffix or '未知'} 格式，请上传 PDF、DOCX 或 TXT",
+        )
+
+    storage = LocalStorageService()
+    resume_dir = storage.create_resume_dir()
+    original_path = resume_dir / f"original{suffix}"
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="文件大小不能超过 10MB")
+    original_path.write_bytes(contents)
+
+    repository = ResumeRepository(db)
+    resume_file = repository.create_resume_file(
+        ResumeFile(
+            job_id=job_id,
+            file_name=file.filename or original_path.name,
+            file_type=suffix.lstrip("."),
+            file_path=storage.to_relative_path(original_path),
+            upload_status="uploaded",
+            parse_status="pending",
+        )
+    )
+
+    return _parse_and_save_resume(repository, resume_file, original_path)
+
+
+@router.get("/resume-files/{resume_file_id}", response_model=ResumeFileRead)
+def get_resume_file(resume_file_id: str, db: Session = Depends(get_db)) -> ResumeFileRead:
+    resume_file = ResumeRepository(db).get_resume_file(resume_file_id)
+    if not resume_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历文件不存在")
+    return ResumeFileRead.model_validate(resume_file)
+
+
+@router.get("/resume-files/{resume_file_id}/preview", response_model=ResumePreview)
+def preview_resume_file(resume_file_id: str, db: Session = Depends(get_db)) -> ResumePreview:
+    resume_file = ResumeRepository(db).get_resume_file(resume_file_id)
+    if not resume_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历文件不存在")
+    if resume_file.parsed_text:
+        return ResumePreview(
+            resume_file_id=resume_file.id,
+            file_name=resume_file.file_name,
+            content_type="text/plain",
+            content=resume_file.parsed_text,
+        )
+    return ResumePreview(
+        resume_file_id=resume_file.id,
+        file_name=resume_file.file_name,
+        content_type="text/plain",
+        content="暂无可预览文本",
+    )
+
+
+@router.post("/resume-files/{resume_file_id}/parse", response_model=ResumeUploadResult)
+def parse_resume_file(resume_file_id: str, db: Session = Depends(get_db)) -> ResumeUploadResult:
+    repository = ResumeRepository(db)
+    resume_file = repository.get_resume_file(resume_file_id)
+    if not resume_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历文件不存在")
+
+    path = LocalStorageService().resolve(resume_file.file_path)
+    return _parse_and_save_resume(repository, resume_file, path)
+
+
+@router.get("/resume-files/{resume_file_id}/field-extractions", response_model=list[ResumeFieldExtractionRead])
+def list_field_extractions(
+    resume_file_id: str,
+    db: Session = Depends(get_db),
+) -> list[ResumeFieldExtractionRead]:
+    repository = ResumeRepository(db)
+    if not repository.get_resume_file(resume_file_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历文件不存在")
+    rows = repository.list_field_extractions(resume_file_id)
+    return [ResumeFieldExtractionRead.model_validate(row) for row in rows]
+
+
+def _parse_and_save_resume(
+    repository: ResumeRepository,
+    resume_file: ResumeFile,
+    original_path: Path,
+) -> ResumeUploadResult:
+    extractor = ResumeTextExtractor()
+
+    try:
+        parsed_text = extractor.extract_text(original_path)
+        parsed_resume = parse_resume_text(resume_file.file_name, parsed_text)
+        preview_path = original_path.with_name("preview.txt")
+        preview_path.write_text(parsed_text, encoding="utf-8")
+
+        candidate = repository.create_candidate(Candidate(**parsed_resume.candidate_data))
+        resume_file.candidate_id = candidate.id
+        resume_file.parsed_text = parsed_text
+        resume_file.preview_path = LocalStorageService().to_relative_path(preview_path)
+        resume_file.parse_status = "success"
+        resume_file.parse_error = None
+        resume_file = repository.update_resume_file(resume_file)
+
+        field_extractions = repository.replace_field_extractions(
+            resume_file.id,
+            [
+                ResumeFieldExtraction(
+                    resume_file_id=resume_file.id,
+                    candidate_id=candidate.id,
+                    **source,
+                )
+                for source in parsed_resume.field_sources
+            ],
+        )
+
+        return ResumeUploadResult(
+            resume_file=ResumeFileRead.model_validate(resume_file),
+            candidate=candidate,
+            field_extractions=[
+                ResumeFieldExtractionRead.model_validate(row) for row in field_extractions
+            ],
+        )
+    except UnsupportedResumeFileType as exc:
+        resume_file.parse_status = "failed"
+        resume_file.parse_error = str(exc)
+        resume_file = repository.update_resume_file(resume_file)
+        return ResumeUploadResult(
+            resume_file=ResumeFileRead.model_validate(resume_file),
+            candidate=None,
+            field_extractions=[],
+        )
+    except Exception as exc:
+        resume_file.parse_status = "failed"
+        resume_file.parse_error = f"解析失败：{exc}"
+        resume_file = repository.update_resume_file(resume_file)
+        return ResumeUploadResult(
+            resume_file=ResumeFileRead.model_validate(resume_file),
+            candidate=None,
+            field_extractions=[],
+        )

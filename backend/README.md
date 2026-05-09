@@ -12,6 +12,20 @@ pip install -e .[dev]
 uvicorn app.main:app --reload --port 8010
 ```
 
+## 环境变量
+
+真实密钥请放在 `backend/.env`，不要写入 `.env.example`。
+
+```powershell
+Copy-Item .env.example .env
+```
+
+然后在 `.env` 中填写：
+
+```text
+AI_API_KEY=你的真实 DeepSeek Key
+```
+
 健康检查：
 
 ```text

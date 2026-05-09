@@ -16,10 +16,10 @@ class Settings(BaseSettings):
     upload_dir: Path = ROOT_DIR / "uploads"
     data_dir: Path = ROOT_DIR / "data"
 
-    ai_provider: str = "openai_compatible"
-    ai_base_url: str = ""
-    ai_api_key: str = ""
-    ai_model: str = ""
+    ai_provider: str = "deepseek"
+    ai_base_url: str = "https://api.deepseek.com"
+    ai_api_key: str = "YOUR_DEEPSEEK_API_KEY"
+    ai_model: str = "deepseek-v4-flash"
     ai_timeout_seconds: int = 60
 
     cors_origins: list[str] = [

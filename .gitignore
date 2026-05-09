@@ -34,3 +34,5 @@ backend/uploads/*
 Thumbs.db
 .vscode/
 .idea/
+
+简历数据/*

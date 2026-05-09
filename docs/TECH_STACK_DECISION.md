@@ -153,10 +153,11 @@ AIProvider
 建议使用环境变量：
 
 ```text
-AI_PROVIDER=openai_compatible
-AI_BASE_URL=
-AI_API_KEY=
-AI_MODEL=
+AI_PROVIDER=deepseek
+AI_BASE_URL=https://api.deepseek.com
+AI_API_KEY=YOUR_DEEPSEEK_API_KEY
+AI_MODEL=deepseek-v4-flash
+# AI_MODEL=deepseek-v4-pro
 AI_TIMEOUT_SECONDS=60
 ```
 
@@ -329,10 +330,16 @@ resumes2ai/
 - 岗位管理后端接口已完成临时服务验证。
 - 前端岗位列表、创建岗位和岗位详情页面已接入真实后端接口。
 - 本地后端默认使用 `8010` 端口，前端默认 API 地址为 `http://localhost:8010`。
+- Phase 2 P0 已实现 PDF、DOCX、TXT 简历上传、文本抽取、结构化解析占位、预览和字段来源保存；样例 PDF/DOCX 验证通过。
+- 已新增 DeepSeek/OpenAI-compatible AI Provider，默认 `base_url` 为 `https://api.deepseek.com`，默认模型为 `deepseek-v4-flash`，可切换 `deepseek-v4-pro`。
+- 真实 key 已迁移到被 Git 忽略的 `backend/.env`，`.env.example` 保持占位符，避免误提交密钥。
+- DeepSeek Provider 已用极小 JSON 请求验证连通，返回合法 JSON。
 
 尚未完成：
 
-- 简历上传、解析、修正和匹配评分业务接口。
+- 原简历对照修正页面。
+- 将 AI Provider 接入简历结构化解析任务。
+- 匹配评分业务接口。
 
 ## 11. 技术栈最终确认
 
