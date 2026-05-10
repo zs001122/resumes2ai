@@ -346,14 +346,61 @@ export async function getCandidateMatch(jobId: string, candidateId: string) {
 
 export async function listCandidates(
   jobId: string,
-  filters?: { status?: string; level?: string; min_score?: string },
+  filters?: {
+    status?: string;
+    level?: string;
+    min_score?: string;
+    max_score?: string;
+    city?: string;
+    min_years?: string;
+    max_years?: string;
+    education?: string;
+    skill?: string;
+    has_risk?: string;
+    low_confidence?: string;
+    archived?: string;
+  },
 ) {
   const params = new URLSearchParams();
   if (filters?.status) params.set("status_filter", filters.status);
   if (filters?.level) params.set("level", filters.level);
   if (filters?.min_score) params.set("min_score", filters.min_score);
+  if (filters?.max_score) params.set("max_score", filters.max_score);
+  if (filters?.city) params.set("city", filters.city);
+  if (filters?.min_years) params.set("min_years", filters.min_years);
+  if (filters?.max_years) params.set("max_years", filters.max_years);
+  if (filters?.education) params.set("education", filters.education);
+  if (filters?.skill) params.set("skill", filters.skill);
+  if (filters?.has_risk) params.set("has_risk", filters.has_risk);
+  if (filters?.low_confidence) params.set("low_confidence", filters.low_confidence);
+  if (filters?.archived) params.set("archived", filters.archived);
   const query = params.toString();
   return requestJson<CandidateListItem[]>(`/api/jobs/${jobId}/candidates${query ? `?${query}` : ""}`);
+}
+
+export async function bulkUpdateCandidateStatus(
+  jobId: string,
+  candidateIds: string[],
+  status: CandidateStatusValue,
+) {
+  return requestJson<CandidateStatus[]>(`/api/jobs/${jobId}/candidates/bulk-status`, {
+    method: "POST",
+    body: JSON.stringify({ candidate_ids: candidateIds, status }),
+  });
+}
+
+export async function bulkAddCandidatesToTalentPool(jobId: string, candidateIds: string[]) {
+  return requestJson<CandidateStatus[]>(`/api/jobs/${jobId}/candidates/bulk-add-to-talent-pool`, {
+    method: "POST",
+    body: JSON.stringify({ candidate_ids: candidateIds }),
+  });
+}
+
+export async function bulkCreateCandidateMatches(jobId: string, candidateIds: string[]) {
+  return requestJson<CandidateMatch[]>(`/api/jobs/${jobId}/candidates/bulk-match`, {
+    method: "POST",
+    body: JSON.stringify({ candidate_ids: candidateIds }),
+  });
 }
 
 export async function getCandidateDetail(jobId: string, candidateId: string) {

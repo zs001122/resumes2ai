@@ -123,6 +123,15 @@ class CandidateStatusUpdate(BaseModel):
     status: str
 
 
+class CandidateBulkStatusUpdate(BaseModel):
+    candidate_ids: list[str]
+    status: str
+
+
+class CandidateBulkActionRequest(BaseModel):
+    candidate_ids: list[str]
+
+
 class CandidateListItem(BaseModel):
     candidate: CandidateRead
     resume_file: ResumeFileRead

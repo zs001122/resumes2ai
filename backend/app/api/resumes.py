@@ -12,11 +12,14 @@ from app.repositories.jobs import JobRepository
 from app.repositories.matches import CandidateMatchRepository
 from app.repositories.resumes import ResumeRepository
 from app.repositories.v2 import V2Repository
+from app.schemas.match import CandidateMatchRead
 from app.schemas.resume import (
     CandidateDetail,
     CandidateListItem,
     CandidateRead,
     CandidateReviewData,
+    CandidateBulkActionRequest,
+    CandidateBulkStatusUpdate,
     CandidateStatusRead,
     CandidateStatusUpdate,
     CandidateUpdate,
@@ -225,6 +228,15 @@ def list_candidates(
     status_filter: str | None = None,
     level: str | None = None,
     min_score: float | None = None,
+    max_score: float | None = None,
+    city: str | None = None,
+    min_years: float | None = None,
+    max_years: float | None = None,
+    education: str | None = None,
+    skill: str | None = None,
+    has_risk: bool | None = None,
+    low_confidence: bool | None = None,
+    archived: bool | None = None,
     db: Session = Depends(get_db),
 ) -> list[CandidateListItem]:
     if not JobRepository(db).get(job_id):
@@ -241,6 +253,24 @@ def list_candidates(
             continue
         if min_score is not None and (not match or match.score < min_score):
             continue
+        if max_score is not None and (not match or match.score > max_score):
+            continue
+        if city and city not in (candidate.city or ""):
+            continue
+        if min_years is not None and ((candidate.years_of_experience or 0) < min_years):
+            continue
+        if max_years is not None and candidate.years_of_experience is not None and candidate.years_of_experience > max_years:
+            continue
+        if education and education not in (candidate.highest_education or ""):
+            continue
+        if skill and skill.lower() not in " ".join(candidate.skills or []).lower():
+            continue
+        if has_risk is not None and bool(match and match.risks) != has_risk:
+            continue
+        if low_confidence is not None and bool(candidate.low_confidence_fields) != low_confidence:
+            continue
+        if archived is not None and ((candidate_status.status if candidate_status else "pending") == "archived") != archived:
+            continue
         items.append(
             CandidateListItem(
                 candidate=CandidateRead.model_validate(candidate),
@@ -250,6 +280,81 @@ def list_candidates(
             )
         )
     return items
+
+
+@router.post("/jobs/{job_id}/candidates/bulk-status", response_model=list[CandidateStatusRead])
+def bulk_update_candidate_status(
+    job_id: str,
+    payload: CandidateBulkStatusUpdate,
+    db: Session = Depends(get_db),
+) -> list[CandidateStatusRead]:
+    if payload.status not in ALLOWED_CANDIDATE_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不支持的候选人状态")
+    if not JobRepository(db).get(job_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    repository = ResumeRepository(db)
+    v2_repository = V2Repository(db)
+    rows = []
+    for candidate_id in payload.candidate_ids:
+        if not repository.get_candidate(candidate_id):
+            continue
+        row = repository.set_candidate_status(job_id, candidate_id, payload.status)
+        rows.append(row)
+        v2_repository.create_timeline_event(
+            CandidateTimelineEventCreate(
+                candidate_id=candidate_id,
+                job_id=job_id,
+                action_type=TimelineActionType.BULK_ACTION,
+                action_summary="批量更新候选人状态",
+                after_value=payload.status,
+            )
+        )
+    return [CandidateStatusRead.model_validate(row) for row in rows]
+
+
+@router.post("/jobs/{job_id}/candidates/bulk-add-to-talent-pool", response_model=list[CandidateStatusRead])
+def bulk_add_candidates_to_talent_pool(
+    job_id: str,
+    payload: CandidateBulkActionRequest,
+    db: Session = Depends(get_db),
+) -> list[CandidateStatusRead]:
+    return bulk_update_candidate_status(
+        job_id,
+        CandidateBulkStatusUpdate(candidate_ids=payload.candidate_ids, status="archived"),
+        db,
+    )
+
+
+@router.post("/jobs/{job_id}/candidates/bulk-match", response_model=list[CandidateMatchRead])
+async def bulk_create_candidate_matches(
+    job_id: str,
+    payload: CandidateBulkActionRequest,
+    db: Session = Depends(get_db),
+) -> list[CandidateMatchRead]:
+    job = JobRepository(db).get(job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    repository = ResumeRepository(db)
+    match_repository = CandidateMatchRepository(db)
+    v2_repository = V2Repository(db)
+    rows = []
+    for candidate_id in payload.candidate_ids:
+        candidate = repository.get_candidate(candidate_id)
+        if not candidate:
+            continue
+        match_payload = await generate_candidate_match(job, candidate)
+        row = match_repository.create(job_id, candidate_id, match_payload)
+        rows.append(row)
+        v2_repository.create_timeline_event(
+            CandidateTimelineEventCreate(
+                candidate_id=candidate_id,
+                job_id=job_id,
+                action_type=TimelineActionType.BULK_ACTION,
+                action_summary="批量重新评分",
+                after_value=match_payload.level,
+            )
+        )
+    return [CandidateMatchRead.model_validate(row) for row in rows]
 
 
 @router.get("/jobs/{job_id}/candidates/{candidate_id}", response_model=CandidateDetail)

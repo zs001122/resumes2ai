@@ -9,6 +9,9 @@ import { EmptyState, Notice, WorkspaceShell } from "@/components/WorkspaceShell"
 import {
   CandidateListItem,
   CandidateStatusValue,
+  bulkAddCandidatesToTalentPool,
+  bulkCreateCandidateMatches,
+  bulkUpdateCandidateStatus,
   listCandidates,
   updateCandidateStatus,
 } from "@/lib/api";
@@ -29,8 +32,16 @@ export default function CandidatesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
   const [minScore, setMinScore] = useState("");
+  const [maxScore, setMaxScore] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [skillFilter, setSkillFilter] = useState("");
+  const [educationFilter, setEducationFilter] = useState("");
+  const [riskFilter, setRiskFilter] = useState("");
+  const [lowConfidenceFilter, setLowConfidenceFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadCandidates() {
@@ -42,13 +53,68 @@ export default function CandidatesPage() {
           status: statusFilter,
           level: levelFilter,
           min_score: minScore,
+          max_score: maxScore,
+          city: cityFilter,
+          skill: skillFilter,
+          education: educationFilter,
+          has_risk: riskFilter,
+          low_confidence: lowConfidenceFilter,
         }),
       );
+      setSelectedIds([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "候选人列表加载失败");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function runBulkStatus(value: CandidateStatusValue) {
+    if (!selectedIds.length) return;
+    setBulkSaving(true);
+    setError(null);
+    try {
+      await bulkUpdateCandidateStatus(params.jobId, selectedIds, value);
+      await loadCandidates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量更新失败");
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  async function runBulkArchive() {
+    if (!selectedIds.length) return;
+    setBulkSaving(true);
+    setError(null);
+    try {
+      await bulkAddCandidatesToTalentPool(params.jobId, selectedIds);
+      await loadCandidates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量入库失败");
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  async function runBulkMatch() {
+    if (!selectedIds.length) return;
+    setBulkSaving(true);
+    setError(null);
+    try {
+      await bulkCreateCandidateMatches(params.jobId, selectedIds);
+      await loadCandidates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量重新评分失败");
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  function toggleCandidate(candidateId: string) {
+    setSelectedIds((current) =>
+      current.includes(candidateId) ? current.filter((id) => id !== candidateId) : [...current, candidateId],
+    );
   }
 
   async function changeStatus(candidateId: string, value: CandidateStatusValue) {
@@ -69,6 +135,7 @@ export default function CandidatesPage() {
   }, [params.jobId]);
 
   const sorted = [...items].sort((a, b) => (b.match?.score ?? -1) - (a.match?.score ?? -1));
+  const allVisibleSelected = sorted.length > 0 && sorted.every((item) => selectedIds.includes(item.candidate.id));
   const stats = useMemo(
     () => ({
       total: items.length,
@@ -117,7 +184,7 @@ export default function CandidatesPage() {
       </div>
 
       <section className="panel mb-5 p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">全部状态</option>
             {statusOptions.map((item) => (
@@ -137,8 +204,49 @@ export default function CandidatesPage() {
             value={minScore}
             onChange={(e) => setMinScore(e.target.value.replace(/[^\d.]/g, ""))}
           />
+          <input
+            className="input"
+            inputMode="numeric"
+            placeholder="最高匹配分"
+            value={maxScore}
+            onChange={(e) => setMaxScore(e.target.value.replace(/[^\d.]/g, ""))}
+          />
+          <input className="input" placeholder="城市" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} />
           <button onClick={() => void loadCandidates()} className="btn-primary">
             应用筛选
+          </button>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <input className="input" placeholder="技能关键词" value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)} />
+          <input className="input" placeholder="学历关键词" value={educationFilter} onChange={(e) => setEducationFilter(e.target.value)} />
+          <select className="input" value={riskFilter} onChange={(e) => setRiskFilter(e.target.value)}>
+            <option value="">风险不限</option>
+            <option value="true">存在风险点</option>
+            <option value="false">无风险点</option>
+          </select>
+          <select className="input" value={lowConfidenceFilter} onChange={(e) => setLowConfidenceFilter(e.target.value)}>
+            <option value="">置信度不限</option>
+            <option value="true">有待确认字段</option>
+            <option value="false">无待确认字段</option>
+          </select>
+        </div>
+      </section>
+
+      <section className="panel mb-5 flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+        <p className="text-sm text-muted-foreground">已选择 {selectedIds.length} 位候选人</p>
+        <div className="flex flex-wrap gap-2">
+          <button disabled={!selectedIds.length || bulkSaving} onClick={() => void runBulkStatus("pending_contact")} className="btn-secondary">
+            标记待沟通
+          </button>
+          <button disabled={!selectedIds.length || bulkSaving} onClick={() => void runBulkStatus("rejected")} className="btn-secondary">
+            批量淘汰
+          </button>
+          <button disabled={!selectedIds.length || bulkSaving} onClick={() => void runBulkArchive()} className="btn-secondary">
+            加入人才库
+          </button>
+          <button disabled={!selectedIds.length || bulkSaving} onClick={() => void runBulkMatch()} className="btn-primary">
+            {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            重新评分
           </button>
         </div>
       </section>
@@ -151,7 +259,16 @@ export default function CandidatesPage() {
           </div>
         ) : sorted.length ? (
           <div className="overflow-x-auto">
-            <div className="data-grid-head grid-cols-[1.15fr_0.9fr_0.55fr_0.75fr_0.85fr_0.7fr]">
+            <div className="data-grid-head grid-cols-[44px_1.15fr_0.9fr_0.55fr_0.75fr_0.85fr_0.7fr]">
+              <span>
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={(event) =>
+                    setSelectedIds(event.target.checked ? sorted.map((item) => item.candidate.id) : [])
+                  }
+                />
+              </span>
               <span>候选人</span>
               <span>岗位/城市</span>
               <span>匹配分</span>
@@ -161,7 +278,14 @@ export default function CandidatesPage() {
             </div>
             <div className="divide-y divide-border">
               {sorted.map((item) => (
-                <div key={item.candidate.id} className="data-grid-row grid-cols-[1.15fr_0.9fr_0.55fr_0.75fr_0.85fr_0.7fr]">
+                <div key={item.candidate.id} className="data-grid-row grid-cols-[44px_1.15fr_0.9fr_0.55fr_0.75fr_0.85fr_0.7fr]">
+                  <span>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(item.candidate.id)}
+                      onChange={() => toggleCandidate(item.candidate.id)}
+                    />
+                  </span>
                   <div className="min-w-0">
                     <p className="truncate font-medium">{item.candidate.name || "姓名待确认"}</p>
                     <p className="mt-1 truncate text-xs text-muted-foreground">{item.candidate.phone || item.candidate.email || "联系方式待确认"}</p>
