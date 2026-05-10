@@ -230,9 +230,12 @@ export default function CandidateDetailPage() {
 
             <Panel title="原简历预览">
               <p className="mb-3 text-sm text-muted-foreground">{detail.resume_file.file_name}</p>
-              <pre className="max-h-[720px] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-sm leading-7">
-                {detail.preview.content}
-              </pre>
+              <div className="max-h-[720px] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-sm leading-7">
+                {renderHighlightedPreview(
+                  detail.preview.content,
+                  [...detail.candidate.skills, ...explanations.map((item) => item.evidence_text || "")].filter(Boolean),
+                )}
+              </div>
             </Panel>
 
             <Panel title="操作时间线">
@@ -312,4 +315,57 @@ function TagList({ title, items }: { title: string; items: string[] }) {
       )}
     </div>
   );
+}
+
+function renderHighlightedPreview(content: string, keywords: string[]): ReactNode[] {
+  const ranges = keywords.flatMap((keyword) => findAllRanges(content, keyword));
+  const merged = mergeRanges(ranges, content.length);
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  for (const range of merged) {
+    if (range.start > cursor) {
+      nodes.push(content.slice(cursor, range.start));
+    }
+    nodes.push(
+      <mark key={`${range.start}-${range.end}`} className="rounded-sm bg-emerald-100 px-0.5 text-emerald-950">
+        {content.slice(range.start, range.end)}
+      </mark>,
+    );
+    cursor = range.end;
+  }
+  if (cursor < content.length) {
+    nodes.push(content.slice(cursor));
+  }
+  return nodes;
+}
+
+function findAllRanges(content: string, keyword: string): Array<{ start: number; end: number }> {
+  if (!keyword.trim()) return [];
+  const ranges: Array<{ start: number; end: number }> = [];
+  const lowerContent = content.toLowerCase();
+  const lowerKeyword = keyword.toLowerCase();
+  let index = lowerContent.indexOf(lowerKeyword);
+  while (index >= 0) {
+    ranges.push({ start: index, end: index + keyword.length });
+    index = lowerContent.indexOf(lowerKeyword, index + keyword.length);
+  }
+  return ranges;
+}
+
+function mergeRanges(ranges: Array<{ start: number; end: number }>, maxLength: number) {
+  const sorted = ranges
+    .map((range) => ({
+      start: Math.max(0, Math.min(maxLength, range.start)),
+      end: Math.max(0, Math.min(maxLength, range.end)),
+    }))
+    .filter((range) => range.end > range.start)
+    .sort((a, b) => a.start - b.start || b.end - a.end);
+  const result: Array<{ start: number; end: number }> = [];
+  for (const range of sorted) {
+    const previous = result[result.length - 1];
+    if (!previous || range.start >= previous.end) {
+      result.push(range);
+    }
+  }
+  return result;
 }

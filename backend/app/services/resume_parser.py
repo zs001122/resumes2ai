@@ -82,14 +82,20 @@ def parse_resume_text(file_name: str, text: str) -> ParsedResume:
     }
 
     field_sources = [
-        _source("name", name, file_name, 0.8 if name else 0.2),
-        _source("phone", phone, phone, 0.95 if phone else 0.1),
-        _source("email", email, email, 0.95 if email else 0.1),
-        _source("city", city, city, 0.7 if city else 0.1),
-        _source("years_of_experience", str(years) if years is not None else None, file_name, 0.65 if years else 0.1),
-        _source("highest_education", education, education, 0.7 if education else 0.1),
-        _source("current_title", current_title, file_name, 0.6 if current_title else 0.1),
-        _source("skills", ", ".join(skills) if skills else None, None, 0.75 if skills else 0.1),
+        _source("name", name, file_name, 0.8 if name else 0.2, source),
+        _source("phone", phone, phone, 0.95 if phone else 0.1, source),
+        _source("email", email, email, 0.95 if email else 0.1, source),
+        _source("city", city, city, 0.7 if city else 0.1, source),
+        _source(
+            "years_of_experience",
+            str(years) if years is not None else None,
+            file_name,
+            0.65 if years else 0.1,
+            source,
+        ),
+        _source("highest_education", education, education, 0.7 if education else 0.1, source),
+        _source("current_title", current_title, file_name, 0.6 if current_title else 0.1, source),
+        _source("skills", ", ".join(skills) if skills else None, _first_keyword(skills, source), 0.75 if skills else 0.1, source),
     ]
     return ParsedResume(candidate_data=candidate_data, field_sources=field_sources)
 
@@ -144,14 +150,24 @@ def _extract_skills(value: str) -> list[str]:
     return result
 
 
-def _source(field_name: str, value: str | None, source_text: str | None, confidence: float) -> dict:
+def _source(field_name: str, value: str | None, source_text: str | None, confidence: float, full_text: str) -> dict:
+    start, end = _locate_span(full_text, source_text or value)
     return {
         "field_name": field_name,
         "extracted_value": value,
         "confidence": confidence,
         "source_text": source_text,
         "page_number": None,
-        "text_start_offset": None,
-        "text_end_offset": None,
+        "text_start_offset": start,
+        "text_end_offset": end,
         "bounding_box": None,
     }
+
+
+def _locate_span(full_text: str, needle: str | None) -> tuple[int | None, int | None]:
+    if not needle:
+        return None, None
+    index = full_text.find(needle)
+    if index < 0:
+        return None, None
+    return index, index + len(needle)
