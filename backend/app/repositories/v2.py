@@ -41,6 +41,21 @@ class V2Repository:
         )
         return list(self.db.scalars(statement).all())
 
+    def list_failed_upload_tasks(self, job_id: str) -> list[UploadProcessingTask]:
+        statement = (
+            select(UploadProcessingTask)
+            .where(
+                UploadProcessingTask.job_id == job_id,
+                (UploadProcessingTask.parse_status == "failed") | (UploadProcessingTask.match_status == "failed"),
+            )
+            .order_by(UploadProcessingTask.created_at.desc())
+        )
+        return list(self.db.scalars(statement).all())
+
+    def get_upload_task_for_resume_file(self, resume_file_id: str) -> UploadProcessingTask | None:
+        statement = select(UploadProcessingTask).where(UploadProcessingTask.resume_file_id == resume_file_id)
+        return self.db.scalars(statement).first()
+
     def update_upload_task(
         self,
         task: UploadProcessingTask,

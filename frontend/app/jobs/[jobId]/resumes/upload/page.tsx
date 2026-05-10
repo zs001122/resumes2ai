@@ -2,19 +2,41 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, FileText, Loader2, PencilLine, RefreshCw, Upload } from "lucide-react";
 
 import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
-import { ResumeUploadResult, retryParseResume, uploadResume } from "@/lib/api";
+import {
+  ResumeUploadResult,
+  UploadProcessingTask,
+  listUploadTasks,
+  retryFailedUploadTasks,
+  retryParseResume,
+  retryUploadTask,
+  uploadResume,
+} from "@/lib/api";
 
 export default function ResumeUploadPage() {
   const params = useParams<{ jobId: string }>();
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [retryingTasks, setRetryingTasks] = useState(false);
   const [results, setResults] = useState<ResumeUploadResult[]>([]);
+  const [tasks, setTasks] = useState<UploadProcessingTask[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  async function loadTasks() {
+    try {
+      setTasks(await listUploadTasks(params.jobId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "上传任务加载失败");
+    }
+  }
+
+  useEffect(() => {
+    void loadTasks();
+  }, []);
 
   function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     setError(null);
@@ -33,6 +55,7 @@ export default function ResumeUploadPage() {
     try {
       for (const file of files) {
         nextResults.push(await uploadResume(params.jobId, file));
+        await loadTasks();
       }
       setResults(nextResults);
     } catch (err) {
@@ -58,14 +81,49 @@ export default function ResumeUploadPage() {
     }
   }
 
+  async function handleRetryTask(taskId: string) {
+    setRetryingId(taskId);
+    setError(null);
+    try {
+      const task = await retryUploadTask(params.jobId, taskId);
+      setTasks((current) => current.map((item) => (item.id === taskId ? task : item)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "任务重试失败");
+    } finally {
+      setRetryingId(null);
+    }
+  }
+
+  async function handleRetryFailedTasks() {
+    setRetryingTasks(true);
+    setError(null);
+    try {
+      const retried = await retryFailedUploadTasks(params.jobId);
+      const byId = new Map(retried.map((task) => [task.id, task]));
+      setTasks((current) => current.map((task) => byId.get(task.id) ?? task));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量重试失败");
+    } finally {
+      setRetryingTasks(false);
+    }
+  }
+
   const summary = useMemo(
     () => ({
-      total: results.length,
-      success: results.filter((item) => item.resume_file.parse_status === "success").length,
-      failed: results.filter((item) => item.resume_file.parse_status === "failed").length,
+      total: tasks.length || results.length,
+      success:
+        tasks.length > 0
+          ? tasks.filter((item) => item.parse_status === "success" && item.match_status === "success").length
+          : results.filter((item) => item.resume_file.parse_status === "success").length,
+      failed:
+        tasks.length > 0
+          ? tasks.filter((item) => item.parse_status === "failed" || item.match_status === "failed").length
+          : results.filter((item) => item.resume_file.parse_status === "failed").length,
     }),
-    [results],
+    [results, tasks],
   );
+
+  const failedTasks = tasks.filter((task) => task.parse_status === "failed" || task.match_status === "failed");
 
   return (
     <WorkspaceShell
@@ -74,9 +132,15 @@ export default function ResumeUploadPage() {
       backHref={`/jobs/${params.jobId}`}
       backLabel="返回岗位详情"
       actions={
-        <Link href={`/jobs/${params.jobId}/candidates`} className="btn-secondary">
-          查看候选人
-        </Link>
+        <>
+          <button onClick={() => void loadTasks()} className="btn-secondary">
+            <RefreshCw className="h-4 w-4" />
+            刷新任务
+          </button>
+          <Link href={`/jobs/${params.jobId}/candidates`} className="btn-secondary">
+            查看候选人
+          </Link>
+        </>
       }
     >
       {error ? <Notice tone="error">{error}</Notice> : null}
@@ -127,12 +191,65 @@ export default function ResumeUploadPage() {
               <Summary label="失败" value={summary.failed} />
             </div>
           </section>
+          {failedTasks.length ? (
+            <button onClick={() => void handleRetryFailedTasks()} disabled={retryingTasks} className="btn-primary w-full">
+              {retryingTasks ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              重试失败项
+            </button>
+          ) : null}
           <section className="panel p-5 text-sm leading-6 text-muted-foreground">
             <h2 className="text-base font-semibold text-foreground">上传范围</h2>
             <p className="mt-3">MVP 暂不支持老版 DOC、图片简历和 ZIP 包。解析失败时可以在结果区重新解析。</p>
           </section>
         </aside>
       </div>
+
+      {tasks.length ? (
+        <section className="panel mt-5 overflow-hidden">
+          <div className="border-b border-border px-5 py-4">
+            <h2 className="text-base font-semibold">上传处理队列</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="data-grid-head grid-cols-[1.4fr_0.65fr_0.65fr_0.65fr_1fr_0.7fr]">
+              <span>文件</span>
+              <span>上传</span>
+              <span>解析</span>
+              <span>评分</span>
+              <span>失败原因</span>
+              <span>操作</span>
+            </div>
+            <div className="divide-y divide-border">
+              {tasks.map((task) => (
+                <div key={task.id} className="data-grid-row grid-cols-[1.4fr_0.65fr_0.65fr_0.65fr_1fr_0.7fr]">
+                  <span className="min-w-0 truncate font-medium">{task.original_filename}</span>
+                  <StatusText value={task.upload_status} />
+                  <StatusText value={task.parse_status} />
+                  <StatusText value={task.match_status} />
+                  <span className="min-w-0 truncate text-xs text-red-600">{task.error_message || "-"}</span>
+                  <span>
+                    {task.parse_status === "failed" || task.match_status === "failed" ? (
+                      <button
+                        onClick={() => void handleRetryTask(task.id)}
+                        disabled={retryingId === task.id}
+                        className="btn-secondary h-9 text-xs"
+                      >
+                        {retryingId === task.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        )}
+                        重试
+                      </button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">无需操作</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {results.length ? (
         <section className="panel mt-5 overflow-hidden">
@@ -187,6 +304,18 @@ export default function ResumeUploadPage() {
       ) : null}
     </WorkspaceShell>
   );
+}
+
+function StatusText({ value }: { value: string }) {
+  const labels: Record<string, string> = {
+    pending: "等待中",
+    uploaded: "已上传",
+    success: "成功",
+    failed: "失败",
+    skipped: "跳过",
+  };
+  const isFailed = value === "failed";
+  return <span className={isFailed ? "text-red-600" : "text-muted-foreground"}>{labels[value] ?? value}</span>;
 }
 
 function Summary({ label, value }: { label: string; value: number }) {

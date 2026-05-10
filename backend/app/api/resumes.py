@@ -11,6 +11,7 @@ from app.models.resume import ResumeFieldExtraction, ResumeFile
 from app.repositories.jobs import JobRepository
 from app.repositories.matches import CandidateMatchRepository
 from app.repositories.resumes import ResumeRepository
+from app.repositories.v2 import V2Repository
 from app.schemas.resume import (
     CandidateDetail,
     CandidateListItem,
@@ -24,6 +25,13 @@ from app.schemas.resume import (
     ResumeFileRead,
     ResumePreview,
     ResumeUploadResult,
+)
+from app.schemas.v2 import (
+    CandidateTimelineEventCreate,
+    TimelineActionType,
+    UploadProcessingTaskCreate,
+    UploadProcessingTaskRead,
+    UploadProcessingTaskUpdate,
 )
 from app.services.matching import generate_candidate_match
 from app.services.parsers.resume_text import ResumeTextExtractor, UnsupportedResumeFileType
@@ -76,15 +84,83 @@ async def upload_resume(
             parse_status="pending",
         )
     )
+    v2_repository = V2Repository(db)
+    task = v2_repository.create_upload_task(
+        UploadProcessingTaskCreate(
+            job_id=job_id,
+            resume_file_id=resume_file.id,
+            original_filename=resume_file.file_name,
+            upload_status="uploaded",
+            parse_status="pending",
+            match_status="pending",
+        )
+    )
 
     result = _parse_and_save_resume(repository, resume_file, original_path)
+    task = _sync_task_after_parse(v2_repository, task, result)
     if result.candidate:
         job = JobRepository(db).get(job_id)
         candidate = repository.get_candidate(result.candidate.id)
         if job and candidate:
-            match_payload = await generate_candidate_match(job, candidate)
-            CandidateMatchRepository(db).create(job_id, candidate.id, match_payload)
+            try:
+                match_payload = await generate_candidate_match(job, candidate)
+                CandidateMatchRepository(db).create(job_id, candidate.id, match_payload)
+                v2_repository.update_upload_task(
+                    task,
+                    UploadProcessingTaskUpdate(match_status="success", error_message=None),
+                )
+                v2_repository.create_timeline_event(
+                    CandidateTimelineEventCreate(
+                        candidate_id=candidate.id,
+                        job_id=job_id,
+                        action_type=TimelineActionType.MATCH_SUCCEEDED,
+                        action_summary="AI 评分完成",
+                        after_value=match_payload.level,
+                    )
+                )
+            except Exception as exc:
+                v2_repository.update_upload_task(
+                    task,
+                    UploadProcessingTaskUpdate(match_status="failed", error_message=f"评分失败：{exc}"),
+                )
     return result
+
+
+@router.get("/jobs/{job_id}/upload-tasks", response_model=list[UploadProcessingTaskRead])
+def list_upload_tasks(job_id: str, db: Session = Depends(get_db)) -> list[UploadProcessingTaskRead]:
+    if not JobRepository(db).get(job_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    return [UploadProcessingTaskRead.model_validate(row) for row in V2Repository(db).list_upload_tasks(job_id)]
+
+
+@router.post("/jobs/{job_id}/upload-tasks/{task_id}/retry", response_model=UploadProcessingTaskRead)
+async def retry_upload_task(
+    job_id: str,
+    task_id: str,
+    db: Session = Depends(get_db),
+) -> UploadProcessingTaskRead:
+    if not JobRepository(db).get(job_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    v2_repository = V2Repository(db)
+    task = v2_repository.get_upload_task(task_id)
+    if not task or task.job_id != job_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="上传任务不存在")
+    task = await _retry_upload_task(db, task_id)
+    return UploadProcessingTaskRead.model_validate(task)
+
+
+@router.post("/jobs/{job_id}/upload-tasks/retry-failed", response_model=list[UploadProcessingTaskRead])
+async def retry_failed_upload_tasks(
+    job_id: str,
+    db: Session = Depends(get_db),
+) -> list[UploadProcessingTaskRead]:
+    if not JobRepository(db).get(job_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    v2_repository = V2Repository(db)
+    rows = []
+    for task in v2_repository.list_failed_upload_tasks(job_id):
+        rows.append(await _retry_upload_task(db, task.id))
+    return [UploadProcessingTaskRead.model_validate(row) for row in rows]
 
 
 @router.get("/resume-files/{resume_file_id}", response_model=ResumeFileRead)
@@ -123,7 +199,12 @@ def parse_resume_file(resume_file_id: str, db: Session = Depends(get_db)) -> Res
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历文件不存在")
 
     path = LocalStorageService().resolve(resume_file.file_path)
-    return _parse_and_save_resume(repository, resume_file, path)
+    result = _parse_and_save_resume(repository, resume_file, path)
+    v2_repository = V2Repository(db)
+    task = v2_repository.get_upload_task_for_resume_file(resume_file_id)
+    if task:
+        _sync_task_after_parse(v2_repository, task, result)
+    return result
 
 
 @router.get("/resume-files/{resume_file_id}/field-extractions", response_model=list[ResumeFieldExtractionRead])
@@ -214,6 +295,15 @@ def update_candidate_status(
     if not JobRepository(db).get(job_id) or not repository.get_candidate(candidate_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位或候选人不存在")
     row = repository.set_candidate_status(job_id, candidate_id, payload.status)
+    V2Repository(db).create_timeline_event(
+        CandidateTimelineEventCreate(
+            candidate_id=candidate_id,
+            job_id=job_id,
+            action_type=TimelineActionType.STATUS_CHANGED,
+            action_summary="候选人状态更新",
+            after_value=payload.status,
+        )
+    )
     return CandidateStatusRead.model_validate(row)
 
 
@@ -276,6 +366,18 @@ def update_candidate(
     candidate = repository.update_candidate(candidate)
     if logs:
         repository.add_correction_logs(logs)
+        v2_repository = V2Repository(db)
+        for log in logs:
+            v2_repository.create_timeline_event(
+                CandidateTimelineEventCreate(
+                    candidate_id=candidate.id,
+                    job_id=None,
+                    action_type=TimelineActionType.FIELD_CORRECTED,
+                    action_summary=f"修正字段：{log.field_name}",
+                    before_value=log.old_value,
+                    after_value=log.new_value,
+                )
+            )
     return CandidateRead.model_validate(candidate)
 
 
@@ -347,6 +449,79 @@ def _parse_and_save_resume(
             candidate=None,
             field_extractions=[],
         )
+
+
+async def _retry_upload_task(db: Session, task_id: str):
+    repository = ResumeRepository(db)
+    v2_repository = V2Repository(db)
+    task = v2_repository.get_upload_task(task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="上传任务不存在")
+    task = v2_repository.increment_upload_task_retry(task)
+    resume_file = repository.get_resume_file(task.resume_file_id) if task.resume_file_id else None
+    if not resume_file:
+        return v2_repository.update_upload_task(
+            task,
+            UploadProcessingTaskUpdate(error_message="无法重试：简历文件不存在"),
+        )
+
+    if task.parse_status == "failed":
+        result = _parse_and_save_resume(repository, resume_file, LocalStorageService().resolve(resume_file.file_path))
+        task = _sync_task_after_parse(v2_repository, task, result)
+
+    resume_file = repository.get_resume_file(resume_file.id)
+    if resume_file and resume_file.candidate_id and task.match_status == "failed":
+        job = JobRepository(db).get(task.job_id)
+        candidate = repository.get_candidate(resume_file.candidate_id)
+        if job and candidate:
+            try:
+                match_payload = await generate_candidate_match(job, candidate)
+                CandidateMatchRepository(db).create(task.job_id, candidate.id, match_payload)
+                task = v2_repository.update_upload_task(
+                    task,
+                    UploadProcessingTaskUpdate(match_status="success", error_message=None),
+                )
+                v2_repository.create_timeline_event(
+                    CandidateTimelineEventCreate(
+                        candidate_id=candidate.id,
+                        job_id=task.job_id,
+                        action_type=TimelineActionType.MATCH_SUCCEEDED,
+                        action_summary="重新评分完成",
+                        after_value=match_payload.level,
+                    )
+                )
+            except Exception as exc:
+                task = v2_repository.update_upload_task(
+                    task,
+                    UploadProcessingTaskUpdate(match_status="failed", error_message=f"评分失败：{exc}"),
+                )
+    return task
+
+
+def _sync_task_after_parse(v2_repository: V2Repository, task, result: ResumeUploadResult):
+    if result.resume_file.parse_status == "success" and result.candidate:
+        task = v2_repository.update_upload_task(
+            task,
+            UploadProcessingTaskUpdate(parse_status="success", match_status="pending", error_message=None),
+        )
+        v2_repository.create_timeline_event(
+            CandidateTimelineEventCreate(
+                candidate_id=result.candidate.id,
+                job_id=result.resume_file.job_id,
+                action_type=TimelineActionType.PARSE_SUCCEEDED,
+                action_summary="简历解析成功",
+                after_value=result.resume_file.file_name,
+            )
+        )
+        return task
+    return v2_repository.update_upload_task(
+        task,
+        UploadProcessingTaskUpdate(
+            parse_status="failed",
+            match_status="skipped",
+            error_message=result.resume_file.parse_error or "解析失败",
+        ),
+    )
 
 
 def _preview_from_resume_file(resume_file: ResumeFile) -> ResumePreview:

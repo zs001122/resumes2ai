@@ -207,6 +207,20 @@ export type DashboardPayload = {
   recent_activities: DashboardActivity[];
 };
 
+export type UploadProcessingTask = {
+  id: string;
+  job_id: string;
+  resume_file_id: string | null;
+  original_filename: string;
+  upload_status: string;
+  parse_status: string;
+  match_status: string;
+  error_message: string | null;
+  retry_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -285,6 +299,22 @@ export async function uploadResume(jobId: string, file: File) {
   }
 
   return response.json() as Promise<ResumeUploadResult>;
+}
+
+export async function listUploadTasks(jobId: string) {
+  return requestJson<UploadProcessingTask[]>(`/api/jobs/${jobId}/upload-tasks`);
+}
+
+export async function retryUploadTask(jobId: string, taskId: string) {
+  return requestJson<UploadProcessingTask>(`/api/jobs/${jobId}/upload-tasks/${taskId}/retry`, {
+    method: "POST",
+  });
+}
+
+export async function retryFailedUploadTasks(jobId: string) {
+  return requestJson<UploadProcessingTask[]>(`/api/jobs/${jobId}/upload-tasks/retry-failed`, {
+    method: "POST",
+  });
 }
 
 export async function retryParseResume(resumeFileId: string) {

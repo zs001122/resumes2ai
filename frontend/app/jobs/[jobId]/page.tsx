@@ -71,6 +71,10 @@ export default function JobDetailPage() {
               <Upload className="h-4 w-4" />
               上传简历
             </Link>
+            <Link href={`/jobs/${job.id}/upload-tasks`} className="btn-secondary">
+              <RefreshCw className="h-4 w-4" />
+              上传队列
+            </Link>
             <Link href={`/jobs/${job.id}/candidates`} className="btn-secondary">
               <ListFilter className="h-4 w-4" />
               候选人
@@ -122,6 +126,9 @@ export default function JobDetailPage() {
               <div className="mt-4 space-y-2">
                 <Link href={`/jobs/${job.id}/resumes/upload`} className="btn-primary w-full">
                   上传简历
+                </Link>
+                <Link href={`/jobs/${job.id}/upload-tasks`} className="btn-secondary w-full">
+                  查看上传队列
                 </Link>
                 <Link href={`/jobs/${job.id}/candidates`} className="btn-secondary w-full">
                   查看候选人
