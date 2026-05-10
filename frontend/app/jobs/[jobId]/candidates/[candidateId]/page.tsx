@@ -11,18 +11,36 @@ import {
   CandidateDetail,
   CandidateMatch,
   CandidateMatchExplanation,
+  CandidateNote,
+  CandidateTimelineEvent,
   createCandidateMatch,
+  createCandidateNote,
   getCandidateDetail,
   getCandidateMatchExplanations,
+  listCandidateNotes,
+  listCandidateTimeline,
 } from "@/lib/api";
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 
 export default function CandidateDetailPage() {
   const params = useParams<{ jobId: string; candidateId: string }>();
   const [detail, setDetail] = useState<CandidateDetail | null>(null);
   const [match, setMatch] = useState<CandidateMatch | null>(null);
   const [explanations, setExplanations] = useState<CandidateMatchExplanation[]>([]);
+  const [notes, setNotes] = useState<CandidateNote[]>([]);
+  const [timeline, setTimeline] = useState<CandidateTimelineEvent[]>([]);
+  const [noteText, setNoteText] = useState("");
   const [loading, setLoading] = useState(true);
   const [matching, setMatching] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadDetail() {
@@ -37,10 +55,29 @@ export default function CandidateDetailPage() {
       } else {
         setExplanations([]);
       }
+      setNotes(await listCandidateNotes(params.jobId, params.candidateId));
+      setTimeline(await listCandidateTimeline(params.jobId, params.candidateId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "候选人详情加载失败");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCreateNote() {
+    const content = noteText.trim();
+    if (!content) return;
+    setSavingNote(true);
+    setError(null);
+    try {
+      await createCandidateNote(params.jobId, params.candidateId, content);
+      setNoteText("");
+      setNotes(await listCandidateNotes(params.jobId, params.candidateId));
+      setTimeline(await listCandidateTimeline(params.jobId, params.candidateId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "备注保存失败");
+    } finally {
+      setSavingNote(false);
     }
   }
 
@@ -132,6 +169,31 @@ export default function CandidateDetailPage() {
               <Info label="最高学历" value={detail.candidate.highest_education} />
               <TagList title="技能" items={detail.candidate.skills} />
             </Panel>
+
+            <Panel title="候选人备注">
+              <textarea
+                className="input min-h-28 resize-y"
+                placeholder="记录电话沟通、用人部门反馈或后续跟进事项"
+                value={noteText}
+                onChange={(event) => setNoteText(event.target.value)}
+              />
+              <button onClick={() => void handleCreateNote()} disabled={savingNote || !noteText.trim()} className="btn-primary mt-3 w-full">
+                {savingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                保存备注
+              </button>
+              {notes.length ? (
+                <div className="mt-4 space-y-3">
+                  {notes.map((note) => (
+                    <div key={note.id} className="rounded-md bg-muted px-3 py-3">
+                      <p className="text-sm leading-6">{note.content}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(note.created_at)}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground">暂无备注。</p>
+              )}
+            </Panel>
           </aside>
 
           <section className="space-y-5">
@@ -171,6 +233,28 @@ export default function CandidateDetailPage() {
               <pre className="max-h-[720px] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-sm leading-7">
                 {detail.preview.content}
               </pre>
+            </Panel>
+
+            <Panel title="操作时间线">
+              {timeline.length ? (
+                <div className="space-y-3">
+                  {timeline.map((event) => (
+                    <div key={event.id} className="rounded-md border border-border px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold">{event.action_summary}</p>
+                        <time className="text-xs text-muted-foreground">{formatDateTime(event.created_at)}</time>
+                      </div>
+                      {event.after_value || event.before_value ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {event.after_value || event.before_value}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">暂无时间线记录。</p>
+              )}
             </Panel>
           </section>
         </div>

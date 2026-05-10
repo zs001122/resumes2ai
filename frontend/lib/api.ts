@@ -122,6 +122,27 @@ export type CandidateMatchExplanation = {
   created_at: string;
 };
 
+export type CandidateNote = {
+  id: string;
+  candidate_id: string;
+  job_id: string | null;
+  content: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type CandidateTimelineEvent = {
+  id: string;
+  candidate_id: string;
+  job_id: string | null;
+  action_type: string;
+  action_summary: string;
+  before_value: string | null;
+  after_value: string | null;
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+};
+
 export type CandidateReviewData = {
   candidate: Candidate;
   resume_file: ResumeFile;
@@ -357,6 +378,21 @@ export async function getCandidateMatch(jobId: string, candidateId: string) {
 
 export async function getCandidateMatchExplanations(jobId: string, candidateId: string) {
   return requestJson<CandidateMatchExplanation[]>(`/api/jobs/${jobId}/candidates/${candidateId}/match/explanations`);
+}
+
+export async function listCandidateNotes(jobId: string, candidateId: string) {
+  return requestJson<CandidateNote[]>(`/api/jobs/${jobId}/candidates/${candidateId}/notes`);
+}
+
+export async function createCandidateNote(jobId: string, candidateId: string, content: string) {
+  return requestJson<CandidateNote>(`/api/jobs/${jobId}/candidates/${candidateId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ candidate_id: candidateId, job_id: jobId, content, created_by: "local" }),
+  });
+}
+
+export async function listCandidateTimeline(jobId: string, candidateId: string) {
+  return requestJson<CandidateTimelineEvent[]>(`/api/jobs/${jobId}/candidates/${candidateId}/timeline`);
 }
 
 export async function listCandidates(
