@@ -37,6 +37,7 @@ from app.schemas.v2 import (
     UploadProcessingTaskUpdate,
 )
 from app.services.matching import generate_candidate_match
+from app.services.match_explanations import build_match_explanations
 from app.services.parsers.resume_text import ResumeTextExtractor, UnsupportedResumeFileType
 from app.services.resume_parser import parse_resume_text
 from app.services.storage.local import LocalStorageService
@@ -107,7 +108,8 @@ async def upload_resume(
         if job and candidate:
             try:
                 match_payload = await generate_candidate_match(job, candidate)
-                CandidateMatchRepository(db).create(job_id, candidate.id, match_payload)
+                match_row = CandidateMatchRepository(db).create(job_id, candidate.id, match_payload)
+                v2_repository.replace_match_explanations(match_row.id, build_match_explanations(match_row, candidate))
                 v2_repository.update_upload_task(
                     task,
                     UploadProcessingTaskUpdate(match_status="success", error_message=None),
@@ -344,6 +346,7 @@ async def bulk_create_candidate_matches(
             continue
         match_payload = await generate_candidate_match(job, candidate)
         row = match_repository.create(job_id, candidate_id, match_payload)
+        v2_repository.replace_match_explanations(row.id, build_match_explanations(row, candidate))
         rows.append(row)
         v2_repository.create_timeline_event(
             CandidateTimelineEventCreate(
@@ -581,7 +584,8 @@ async def _retry_upload_task(db: Session, task_id: str):
         if job and candidate:
             try:
                 match_payload = await generate_candidate_match(job, candidate)
-                CandidateMatchRepository(db).create(task.job_id, candidate.id, match_payload)
+                match_row = CandidateMatchRepository(db).create(task.job_id, candidate.id, match_payload)
+                v2_repository.replace_match_explanations(match_row.id, build_match_explanations(match_row, candidate))
                 task = v2_repository.update_upload_task(
                     task,
                     UploadProcessingTaskUpdate(match_status="success", error_message=None),

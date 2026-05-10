@@ -10,14 +10,17 @@ import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
   CandidateDetail,
   CandidateMatch,
+  CandidateMatchExplanation,
   createCandidateMatch,
   getCandidateDetail,
+  getCandidateMatchExplanations,
 } from "@/lib/api";
 
 export default function CandidateDetailPage() {
   const params = useParams<{ jobId: string; candidateId: string }>();
   const [detail, setDetail] = useState<CandidateDetail | null>(null);
   const [match, setMatch] = useState<CandidateMatch | null>(null);
+  const [explanations, setExplanations] = useState<CandidateMatchExplanation[]>([]);
   const [loading, setLoading] = useState(true);
   const [matching, setMatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +32,11 @@ export default function CandidateDetailPage() {
       const data = await getCandidateDetail(params.jobId, params.candidateId);
       setDetail(data);
       setMatch(data.match);
+      if (data.match) {
+        setExplanations(await getCandidateMatchExplanations(params.jobId, params.candidateId));
+      } else {
+        setExplanations([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "候选人详情加载失败");
     } finally {
@@ -41,6 +49,7 @@ export default function CandidateDetailPage() {
     setError(null);
     try {
       setMatch(await createCandidateMatch(params.jobId, params.candidateId));
+      setExplanations(await getCandidateMatchExplanations(params.jobId, params.candidateId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "重新评分失败");
     } finally {
@@ -128,6 +137,28 @@ export default function CandidateDetailPage() {
           <section className="space-y-5">
             {match ? (
               <div className="grid gap-4 md:grid-cols-2">
+                <Panel title="分项解释">
+                  {explanations.length ? (
+                    <div className="space-y-3">
+                      {explanations.map((item) => (
+                        <div key={item.id} className="rounded-md bg-muted px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold">{item.dimension}</p>
+                            <span className="text-sm font-semibold">{item.score ?? "-"}</span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.conclusion}</p>
+                          {item.evidence_text ? (
+                            <p className="mt-2 rounded-md bg-background px-3 py-2 text-xs leading-5 text-muted-foreground">
+                              {item.evidence_text}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">暂无分项解释。</p>
+                  )}
+                </Panel>
                 <List title="匹配点" items={match.matched_points} />
                 <List title="短板" items={match.weak_points} />
                 <List title="风险点" items={match.risks} />

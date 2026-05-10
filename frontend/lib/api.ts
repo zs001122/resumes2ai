@@ -111,6 +111,17 @@ export type CandidateMatch = {
   created_at: string;
 };
 
+export type CandidateMatchExplanation = {
+  id: string;
+  match_id: string;
+  dimension: string;
+  score: number | null;
+  conclusion: string;
+  evidence_text: string | null;
+  confidence: number | null;
+  created_at: string;
+};
+
 export type CandidateReviewData = {
   candidate: Candidate;
   resume_file: ResumeFile;
@@ -342,6 +353,10 @@ export async function createCandidateMatch(jobId: string, candidateId: string) {
 
 export async function getCandidateMatch(jobId: string, candidateId: string) {
   return requestJson<CandidateMatch>(`/api/jobs/${jobId}/candidates/${candidateId}/match`);
+}
+
+export async function getCandidateMatchExplanations(jobId: string, candidateId: string) {
+  return requestJson<CandidateMatchExplanation[]>(`/api/jobs/${jobId}/candidates/${candidateId}/match/explanations`);
 }
 
 export async function listCandidates(
