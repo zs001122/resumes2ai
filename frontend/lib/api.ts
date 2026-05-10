@@ -171,6 +171,42 @@ export type JobListItem = {
   pending_count: number;
 };
 
+export type DashboardSummary = {
+  open_jobs: number;
+  total_jobs: number;
+  total_candidates: number;
+  today_new_candidates: number;
+  high_match_candidates: number;
+  pending_candidates: number;
+  pending_contact_candidates: number;
+  parse_failed_resumes: number;
+  match_failed_tasks: number;
+};
+
+export type DashboardTodo = {
+  key: string;
+  title: string;
+  count: number;
+  href: string;
+  tone: "default" | "danger" | "success" | string;
+};
+
+export type DashboardActivity = {
+  id: string;
+  kind: string;
+  title: string;
+  description: string;
+  happened_at: string;
+  job_id: string | null;
+  candidate_id: string | null;
+};
+
+export type DashboardPayload = {
+  summary: DashboardSummary;
+  todos: DashboardTodo[];
+  recent_activities: DashboardActivity[];
+};
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -195,6 +231,10 @@ export async function getApiHealth() {
     service: string;
     version: string;
   }>("/api/health");
+}
+
+export async function getDashboard() {
+  return requestJson<DashboardPayload>("/api/dashboard");
 }
 
 export async function listJobs() {

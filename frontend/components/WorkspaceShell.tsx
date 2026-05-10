@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "总览", href: "/", icon: LayoutDashboard },
+  { label: "总览", href: "/dashboard", icon: LayoutDashboard },
   { label: "岗位", href: "/jobs", icon: BriefcaseBusiness },
 ];
 
@@ -49,7 +49,7 @@ export function WorkspaceShell({
         <nav className="mt-8 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const active = pathname.startsWith(item.href);
             return (
               <Link
                 key={item.label}

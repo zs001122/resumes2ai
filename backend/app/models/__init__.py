@@ -6,13 +6,27 @@ from app.models.job import Job
 from app.models.match import CandidateMatch
 from app.models.resume import ResumeFieldExtraction, ResumeFile
 from app.models.status import CandidateJobStatus
+from app.models.v2 import (
+    CandidateMatchExplanation,
+    CandidateNote,
+    CandidateTag,
+    CandidateTagLink,
+    CandidateTimelineEvent,
+    UploadProcessingTask,
+)
 
 __all__ = [
     "Candidate",
     "CandidateMatch",
+    "CandidateMatchExplanation",
     "FieldCorrectionLog",
     "Job",
     "ResumeFieldExtraction",
     "ResumeFile",
     "CandidateJobStatus",
+    "CandidateNote",
+    "CandidateTag",
+    "CandidateTagLink",
+    "CandidateTimelineEvent",
+    "UploadProcessingTask",
 ]
