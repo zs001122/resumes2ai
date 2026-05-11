@@ -40,6 +40,10 @@ python scripts/api_tests/05_e2e.py
 
 # 6. V2 验收流程：工作台、上传队列、组合筛选、批量操作、解释、时间线、人才库和岗位增强
 python scripts/api_tests/06_v2_acceptance.py
+
+# 7. 删除指定岗位及该岗位下不再关联其他岗位的候选人。默认只预览，追加 --yes 执行删除
+python scripts/api_tests/07_delete_job.py --job-id <JOB_ID>
+python scripts/api_tests/07_delete_job.py --job-id <JOB_ID> --yes
 ```
 
 默认简历样例使用：
