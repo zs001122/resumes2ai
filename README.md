@@ -17,6 +17,12 @@ Phase 6 MVP 收尾验收指南见：
 docs/MVP_ACCEPTANCE_GUIDE.md
 ```
 
+V2 收尾验收指南见：
+
+```text
+docs/V2_ACCEPTANCE_GUIDE.md
+```
+
 ## 项目结构
 
 ```text

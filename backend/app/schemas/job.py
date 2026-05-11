@@ -50,7 +50,7 @@ class JobUpdate(BaseModel):
     nice_to_have: list[str] | None = None
     deal_breakers: list[str] | None = None
     scoring_dimensions: list[str] | None = None
-    status: str | None = Field(default=None, pattern="^(open|closed)$")
+    status: str | None = Field(default=None, pattern="^(open|paused|closed)$")
 
 
 class JobRead(JobBase):
@@ -75,3 +75,20 @@ class JobListItem(BaseModel):
     candidate_count: int = 0
     high_match_count: int = 0
     pending_count: int = 0
+
+
+class JobFunnelStats(BaseModel):
+    uploaded: int = 0
+    pending: int = 0
+    favorite: int = 0
+    pending_contact: int = 0
+    rejected: int = 0
+    archived: int = 0
+    high_match: int = 0
+    needs_review: int = 0
+
+
+class JDQualityCheck(BaseModel):
+    score: int = Field(..., ge=0, le=100)
+    issues: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)

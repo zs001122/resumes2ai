@@ -37,6 +37,9 @@ python scripts/api_tests/04_candidates.py --job-id <JOB_ID>
 
 # 5. 完整端到端流程：创建岗位、上传简历、修正、评分、状态流转
 python scripts/api_tests/05_e2e.py
+
+# 6. V2 验收流程：工作台、上传队列、组合筛选、批量操作、解释、时间线、人才库和岗位增强
+python scripts/api_tests/06_v2_acceptance.py
 ```
 
 默认简历样例使用：

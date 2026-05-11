@@ -25,7 +25,7 @@ export type JobPayload = {
 
 export type Job = JobPayload & {
   id: string;
-  status: "open" | "closed";
+  status: "open" | "paused" | "closed";
   created_at: string;
   updated_at: string;
 };
@@ -216,12 +216,29 @@ export type JobListItem = {
   title: string;
   department: string | null;
   location: string | null;
-  status: "open" | "closed";
+  status: "open" | "paused" | "closed";
   created_at: string;
   updated_at: string;
   candidate_count: number;
   high_match_count: number;
   pending_count: number;
+};
+
+export type JobFunnelStats = {
+  uploaded: number;
+  pending: number;
+  favorite: number;
+  pending_contact: number;
+  rejected: number;
+  archived: number;
+  high_match: number;
+  needs_review: number;
+};
+
+export type JDQualityCheck = {
+  score: number;
+  issues: string[];
+  suggestions: string[];
 };
 
 export type DashboardSummary = {
@@ -335,6 +352,32 @@ export async function closeJob(jobId: string) {
   return requestJson<Job>(`/api/jobs/${jobId}/close`, {
     method: "POST",
   });
+}
+
+export async function copyJob(jobId: string) {
+  return requestJson<Job>(`/api/jobs/${jobId}/copy`, {
+    method: "POST",
+  });
+}
+
+export async function pauseJob(jobId: string) {
+  return requestJson<Job>(`/api/jobs/${jobId}/pause`, {
+    method: "POST",
+  });
+}
+
+export async function reopenJob(jobId: string) {
+  return requestJson<Job>(`/api/jobs/${jobId}/reopen`, {
+    method: "POST",
+  });
+}
+
+export async function getJobFunnel(jobId: string) {
+  return requestJson<JobFunnelStats>(`/api/jobs/${jobId}/funnel`);
+}
+
+export async function getJDQuality(jobId: string) {
+  return requestJson<JDQualityCheck>(`/api/jobs/${jobId}/jd-quality`);
 }
 
 export async function uploadResume(jobId: string, file: File) {

@@ -8,7 +8,9 @@ import { EmptyState, Notice, WorkspaceShell } from "@/components/WorkspaceShell"
 import { JobListItem, listJobs } from "@/lib/api";
 
 function statusLabel(status: JobListItem["status"]) {
-  return status === "open" ? "开放中" : "已关闭";
+  if (status === "open") return "开放中";
+  if (status === "paused") return "已暂停";
+  return "已关闭";
 }
 
 function formatDate(value: string) {

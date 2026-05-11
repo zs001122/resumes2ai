@@ -1,4 +1,5 @@
-from app.schemas.job import JDParseRequest, JDParseResult
+from app.models.job import Job
+from app.schemas.job import JDParseRequest, JDParseResult, JDQualityCheck
 
 
 DEFAULT_SCORING_DIMENSIONS = ["技能匹配", "项目相关度", "经验年限", "行业经验"]
@@ -64,3 +65,27 @@ def _dedupe(items: list[str]) -> list[str]:
             seen.add(item)
             result.append(item)
     return result
+
+
+def check_jd_quality(job: Job) -> JDQualityCheck:
+    issues: list[str] = []
+    suggestions: list[str] = []
+
+    if len(job.jd.strip()) < 120:
+        issues.append("JD 描述偏短，可能不足以支撑稳定筛选。")
+        suggestions.append("补充岗位职责、核心要求、业务场景和团队背景。")
+    if len(job.must_have or []) < 3:
+        issues.append("必备条件不足，筛选标准可能过于宽泛。")
+        suggestions.append("明确 3-6 条必须满足的能力或经验。")
+    if not job.scoring_dimensions:
+        issues.append("缺少评分维度，AI 匹配解释会不够稳定。")
+        suggestions.append("至少保留技能匹配、项目相关度、经验年限等维度。")
+    if not job.deal_breakers:
+        suggestions.append("如有硬性排除条件，可补充为明确的复核规则。")
+    if not job.experience_required:
+        suggestions.append("建议明确工作年限要求，便于候选人排序。")
+    if not job.education_required:
+        suggestions.append("如学历是硬性要求，建议写入岗位基础信息。")
+
+    score = 100 - len(issues) * 22 - max(0, len(suggestions) - 2) * 6
+    return JDQualityCheck(score=max(0, min(100, score)), issues=issues, suggestions=suggestions)

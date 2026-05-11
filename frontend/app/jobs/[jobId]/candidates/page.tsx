@@ -43,6 +43,7 @@ export default function CandidatesPage() {
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   async function loadCandidates() {
     setLoading(true);
@@ -71,11 +72,14 @@ export default function CandidatesPage() {
 
   async function runBulkStatus(value: CandidateStatusValue) {
     if (!selectedIds.length) return;
+    const requestedCount = selectedIds.length;
     setBulkSaving(true);
     setError(null);
+    setBulkResult(null);
     try {
-      await bulkUpdateCandidateStatus(params.jobId, selectedIds, value);
+      const result = await bulkUpdateCandidateStatus(params.jobId, selectedIds, value);
       await loadCandidates();
+      setBulkResult(formatBulkResult("批量状态更新", requestedCount, result.length));
     } catch (err) {
       setError(err instanceof Error ? err.message : "批量更新失败");
     } finally {
@@ -85,11 +89,14 @@ export default function CandidatesPage() {
 
   async function runBulkArchive() {
     if (!selectedIds.length) return;
+    const requestedCount = selectedIds.length;
     setBulkSaving(true);
     setError(null);
+    setBulkResult(null);
     try {
-      await bulkAddCandidatesToTalentPool(params.jobId, selectedIds);
+      const result = await bulkAddCandidatesToTalentPool(params.jobId, selectedIds);
       await loadCandidates();
+      setBulkResult(formatBulkResult("批量加入人才库", requestedCount, result.length));
     } catch (err) {
       setError(err instanceof Error ? err.message : "批量入库失败");
     } finally {
@@ -99,11 +106,14 @@ export default function CandidatesPage() {
 
   async function runBulkMatch() {
     if (!selectedIds.length) return;
+    const requestedCount = selectedIds.length;
     setBulkSaving(true);
     setError(null);
+    setBulkResult(null);
     try {
-      await bulkCreateCandidateMatches(params.jobId, selectedIds);
+      const result = await bulkCreateCandidateMatches(params.jobId, selectedIds);
       await loadCandidates();
+      setBulkResult(formatBulkResult("批量重新评分", requestedCount, result.length));
     } catch (err) {
       setError(err instanceof Error ? err.message : "批量重新评分失败");
     } finally {
@@ -176,6 +186,7 @@ export default function CandidatesPage() {
           {error}
         </Notice>
       ) : null}
+      {bulkResult ? <Notice tone="success">{bulkResult}</Notice> : null}
 
       <div className="mb-5 grid gap-3 md:grid-cols-3">
         <Stat label="候选人" value={stats.total} />
@@ -338,4 +349,11 @@ function Stat({ label, value }: { label: string; value: number }) {
       <p className="mt-1 text-2xl font-semibold">{value}</p>
     </div>
   );
+}
+
+function formatBulkResult(action: string, requestedCount: number, successCount: number) {
+  if (successCount === requestedCount) {
+    return `${action}完成：成功处理 ${successCount} 位候选人。`;
+  }
+  return `${action}部分完成：成功处理 ${successCount} / ${requestedCount} 位候选人，未处理项可能已不存在或不属于当前岗位。`;
 }

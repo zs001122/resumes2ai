@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ListFilter, Loader2, RefreshCw, Upload } from "lucide-react";
+import { Copy, ListFilter, Loader2, Pause, Play, RefreshCw, Upload } from "lucide-react";
 
 import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
-import { closeJob, getJob, Job } from "@/lib/api";
+import {
+  closeJob,
+  copyJob,
+  getJDQuality,
+  getJob,
+  getJobFunnel,
+  Job,
+  JDQualityCheck,
+  JobFunnelStats,
+  pauseJob,
+  reopenJob,
+} from "@/lib/api";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -20,20 +31,67 @@ function formatDate(value: string) {
 
 export default function JobDetailPage() {
   const params = useParams<{ jobId: string }>();
+  const router = useRouter();
   const [job, setJob] = useState<Job | null>(null);
+  const [funnel, setFunnel] = useState<JobFunnelStats | null>(null);
+  const [quality, setQuality] = useState<JDQualityCheck | null>(null);
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadJob() {
     setLoading(true);
     setError(null);
     try {
-      setJob(await getJob(params.jobId));
+      const loadedJob = await getJob(params.jobId);
+      setJob(loadedJob);
+      setFunnel(await getJobFunnel(params.jobId));
+      setQuality(await getJDQuality(params.jobId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "岗位详情加载失败");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCopy() {
+    if (!job) return;
+    setStatusSaving(true);
+    setError(null);
+    try {
+      const copied = await copyJob(job.id);
+      router.push(`/jobs/${copied.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "复制岗位失败");
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  async function handlePause() {
+    if (!job) return;
+    setStatusSaving(true);
+    setError(null);
+    try {
+      setJob(await pauseJob(job.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "暂停岗位失败");
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  async function handleReopen() {
+    if (!job) return;
+    setStatusSaving(true);
+    setError(null);
+    try {
+      setJob(await reopenJob(job.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重新开放岗位失败");
+    } finally {
+      setStatusSaving(false);
     }
   }
 
@@ -79,7 +137,23 @@ export default function JobDetailPage() {
               <ListFilter className="h-4 w-4" />
               候选人
             </Link>
+            <button onClick={() => void handleCopy()} disabled={statusSaving} className="btn-secondary">
+              <Copy className="h-4 w-4" />
+              复制岗位
+            </button>
             {job.status === "open" ? (
+              <button onClick={() => void handlePause()} disabled={statusSaving} className="btn-secondary">
+                {statusSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                暂停
+              </button>
+            ) : null}
+            {job.status !== "open" ? (
+              <button onClick={() => void handleReopen()} disabled={statusSaving} className="btn-secondary">
+                {statusSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                重新开放
+              </button>
+            ) : null}
+            {job.status !== "closed" ? (
               <button onClick={() => void handleClose()} disabled={closing} className="btn-danger">
                 {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 关闭岗位
@@ -113,7 +187,7 @@ export default function JobDetailPage() {
             <section className="panel p-5">
               <div className="flex items-center justify-between gap-3 border-b border-border pb-4">
                 <h2 className="text-base font-semibold">基础信息</h2>
-                <span className="status-pill">{job.status === "open" ? "开放中" : "已关闭"}</span>
+                <span className="status-pill">{statusLabel(job.status)}</span>
               </div>
               <Info label="薪资范围" value={job.salary_range} />
               <Info label="年限要求" value={job.experience_required} />
@@ -135,9 +209,45 @@ export default function JobDetailPage() {
                 </Link>
               </div>
             </section>
+
+            {quality ? (
+              <section className="panel p-5">
+                <h2 className="text-base font-semibold">JD 质量</h2>
+                <p className="mt-2 text-3xl font-semibold">{quality.score}</p>
+                {quality.issues.length ? (
+                  <div className="mt-4 space-y-2">
+                    {quality.issues.map((issue) => (
+                      <p key={issue} className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {issue}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                {quality.suggestions.length ? (
+                  <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                    {quality.suggestions.map((suggestion) => (
+                      <li key={suggestion}>• {suggestion}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
+            ) : null}
           </aside>
 
           <section className="space-y-5">
+            {funnel ? (
+              <div className="grid gap-3 md:grid-cols-4">
+                <FunnelStat label="已上传" value={funnel.uploaded} />
+                <FunnelStat label="高匹配" value={funnel.high_match} />
+                <FunnelStat label="待沟通" value={funnel.pending_contact} />
+                <FunnelStat label="待复核" value={funnel.needs_review} />
+                <FunnelStat label="待筛选" value={funnel.pending} />
+                <FunnelStat label="已收藏" value={funnel.favorite} />
+                <FunnelStat label="已淘汰" value={funnel.rejected} />
+                <FunnelStat label="已入库" value={funnel.archived} />
+              </div>
+            ) : null}
+
             <div className="panel p-5">
               <h2 className="text-base font-semibold">岗位 JD</h2>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{job.jd}</p>
@@ -159,11 +269,26 @@ export default function JobDetailPage() {
   );
 }
 
+function statusLabel(status: Job["status"]) {
+  if (status === "open") return "开放中";
+  if (status === "paused") return "已暂停";
+  return "已关闭";
+}
+
 function Info({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="mt-4">
       <p className="text-xs font-semibold text-muted-foreground">{label}</p>
       <p className="mt-1 text-sm font-medium">{value || "未填写"}</p>
+    </div>
+  );
+}
+
+function FunnelStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="panel px-4 py-3">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold">{value}</p>
     </div>
   );
 }

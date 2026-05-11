@@ -264,7 +264,11 @@ def list_candidates(
             continue
         if min_years is not None and ((candidate.years_of_experience or 0) < min_years):
             continue
-        if max_years is not None and candidate.years_of_experience is not None and candidate.years_of_experience > max_years:
+        if (
+            max_years is not None
+            and candidate.years_of_experience is not None
+            and candidate.years_of_experience > max_years
+        ):
             continue
         if education and education not in (candidate.highest_education or ""):
             continue
