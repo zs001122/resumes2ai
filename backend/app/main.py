@@ -7,6 +7,7 @@ from app.api.health import router as health_router
 from app.api.jobs import router as jobs_router
 from app.api.matches import router as matches_router
 from app.api.resumes import router as resumes_router
+from app.api.talent_pool import router as talent_pool_router
 from app.core.config import settings
 from app.core.runtime import ensure_runtime_dirs
 
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router, prefix="/api")
     app.include_router(matches_router, prefix="/api")
     app.include_router(resumes_router, prefix="/api")
+    app.include_router(talent_pool_router, prefix="/api")
 
     return app
 

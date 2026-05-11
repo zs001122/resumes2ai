@@ -3,6 +3,9 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.match import CandidateMatchRead
+from app.schemas.resume import CandidateRead
+
 
 class TimelineActionType(StrEnum):
     UPLOAD_CREATED = "upload_created"
@@ -136,3 +139,22 @@ class CandidateTagLinkRead(BaseModel):
     candidate_id: str
     tag_id: str
     created_at: datetime
+
+
+class TalentPoolUpdate(BaseModel):
+    job_id: str | None = None
+
+
+class CandidateJobHistoryItem(BaseModel):
+    job_id: str
+    job_title: str
+    job_status: str
+    candidate_status: str
+    updated_at: datetime
+
+
+class TalentPoolCandidateRead(BaseModel):
+    candidate: CandidateRead
+    tags: list[CandidateTagRead] = Field(default_factory=list)
+    job_history: list[CandidateJobHistoryItem] = Field(default_factory=list)
+    latest_match: CandidateMatchRead | None = None

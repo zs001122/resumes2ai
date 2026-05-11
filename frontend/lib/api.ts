@@ -143,6 +143,27 @@ export type CandidateTimelineEvent = {
   created_at: string;
 };
 
+export type CandidateTag = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+export type CandidateJobHistoryItem = {
+  job_id: string;
+  job_title: string;
+  job_status: string;
+  candidate_status: string;
+  updated_at: string;
+};
+
+export type TalentPoolCandidate = {
+  candidate: Candidate;
+  tags: CandidateTag[];
+  job_history: CandidateJobHistoryItem[];
+  latest_match: CandidateMatch | null;
+};
+
 export type CandidateReviewData = {
   candidate: Candidate;
   resume_file: ResumeFile;
@@ -393,6 +414,65 @@ export async function createCandidateNote(jobId: string, candidateId: string, co
 
 export async function listCandidateTimeline(jobId: string, candidateId: string) {
   return requestJson<CandidateTimelineEvent[]>(`/api/jobs/${jobId}/candidates/${candidateId}/timeline`);
+}
+
+export async function listTalentPoolCandidates(filters?: {
+  query?: string;
+  skill?: string;
+  city?: string;
+  education?: string;
+  min_years?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.query) params.set("query", filters.query);
+  if (filters?.skill) params.set("skill", filters.skill);
+  if (filters?.city) params.set("city", filters.city);
+  if (filters?.education) params.set("education", filters.education);
+  if (filters?.min_years) params.set("min_years", filters.min_years);
+  const query = params.toString();
+  return requestJson<TalentPoolCandidate[]>(`/api/talent-pool/candidates${query ? `?${query}` : ""}`);
+}
+
+export async function addCandidateToTalentPool(candidateId: string, jobId?: string) {
+  return requestJson<CandidateStatus>(`/api/candidates/${candidateId}/talent-pool`, {
+    method: "POST",
+    body: JSON.stringify({ job_id: jobId ?? null }),
+  });
+}
+
+export async function removeCandidateFromTalentPool(candidateId: string) {
+  return requestJson<CandidateStatus[]>(`/api/candidates/${candidateId}/talent-pool`, {
+    method: "DELETE",
+  });
+}
+
+export async function listCandidateJobHistory(candidateId: string) {
+  return requestJson<CandidateJobHistoryItem[]>(`/api/candidates/${candidateId}/job-history`);
+}
+
+export async function listCandidateTags(candidateId: string) {
+  return requestJson<CandidateTag[]>(`/api/candidates/${candidateId}/tags`);
+}
+
+export async function addCandidateTag(candidateId: string, name: string) {
+  return requestJson<{ id: string; candidate_id: string; tag_id: string; created_at: string }>(
+    `/api/candidates/${candidateId}/tags`,
+    {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    },
+  );
+}
+
+export async function removeCandidateTag(candidateId: string, tagId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/candidates/${candidateId}/tags/${tagId}`, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(normalizeApiError(errorText, `API request failed: ${response.status}`));
+  }
 }
 
 export async function listCandidates(

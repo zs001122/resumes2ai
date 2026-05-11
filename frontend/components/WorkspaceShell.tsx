@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
+  Archive,
   BriefcaseBusiness,
   LayoutDashboard,
 } from "lucide-react";
@@ -12,6 +13,7 @@ import {
 const navItems = [
   { label: "总览", href: "/dashboard", icon: LayoutDashboard },
   { label: "岗位", href: "/jobs", icon: BriefcaseBusiness },
+  { label: "人才库", href: "/talent-pool", icon: Archive },
 ];
 
 const workflowItems = ["创建岗位", "上传简历", "修正字段", "筛选流转"];
