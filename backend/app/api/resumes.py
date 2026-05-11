@@ -305,7 +305,7 @@ def bulk_update_candidate_status(
     v2_repository = V2Repository(db)
     rows = []
     for candidate_id in payload.candidate_ids:
-        if not repository.get_candidate(candidate_id):
+        if not repository.get_candidate_for_job(job_id, candidate_id):
             continue
         row = repository.set_candidate_status(job_id, candidate_id, payload.status)
         rows.append(row)
@@ -348,9 +348,10 @@ async def bulk_create_candidate_matches(
     v2_repository = V2Repository(db)
     rows = []
     for candidate_id in payload.candidate_ids:
-        candidate = repository.get_candidate(candidate_id)
-        if not candidate:
+        candidate_row = repository.get_candidate_for_job(job_id, candidate_id)
+        if not candidate_row:
             continue
+        candidate, _resume_file = candidate_row
         match_payload = await generate_candidate_match(job, candidate)
         row = match_repository.create(job_id, candidate_id, match_payload)
         v2_repository.replace_match_explanations(row.id, build_match_explanations(row, candidate))
@@ -374,7 +375,7 @@ def list_candidate_notes(
     db: Session = Depends(get_db),
 ) -> list[CandidateNoteRead]:
     repository = ResumeRepository(db)
-    if not JobRepository(db).get(job_id) or not repository.get_candidate(candidate_id):
+    if not JobRepository(db).get(job_id) or not repository.get_candidate_for_job(job_id, candidate_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位或候选人不存在")
     return [CandidateNoteRead.model_validate(row) for row in V2Repository(db).list_notes(candidate_id, job_id)]
 
@@ -387,7 +388,7 @@ def create_candidate_note(
     db: Session = Depends(get_db),
 ) -> CandidateNoteRead:
     repository = ResumeRepository(db)
-    if not JobRepository(db).get(job_id) or not repository.get_candidate(candidate_id):
+    if not JobRepository(db).get(job_id) or not repository.get_candidate_for_job(job_id, candidate_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位或候选人不存在")
     v2_repository = V2Repository(db)
     row = v2_repository.create_note(
@@ -417,7 +418,7 @@ def list_candidate_timeline(
     db: Session = Depends(get_db),
 ) -> list[CandidateTimelineEventRead]:
     repository = ResumeRepository(db)
-    if not JobRepository(db).get(job_id) or not repository.get_candidate(candidate_id):
+    if not JobRepository(db).get(job_id) or not repository.get_candidate_for_job(job_id, candidate_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位或候选人不存在")
     return [
         CandidateTimelineEventRead.model_validate(row)
@@ -465,7 +466,7 @@ def update_candidate_status(
     if payload.status not in ALLOWED_CANDIDATE_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不支持的候选人状态")
     repository = ResumeRepository(db)
-    if not JobRepository(db).get(job_id) or not repository.get_candidate(candidate_id):
+    if not JobRepository(db).get(job_id) or not repository.get_candidate_for_job(job_id, candidate_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位或候选人不存在")
     row = repository.set_candidate_status(job_id, candidate_id, payload.status)
     V2Repository(db).create_timeline_event(

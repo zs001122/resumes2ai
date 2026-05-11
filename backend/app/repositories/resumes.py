@@ -25,6 +25,20 @@ class ResumeRepository:
         )
         return self.db.scalars(statement).first()
 
+    def get_candidate_for_job(self, job_id: str, candidate_id: str) -> tuple[Candidate, ResumeFile] | None:
+        statement = (
+            select(Candidate, ResumeFile)
+            .join(ResumeFile, ResumeFile.candidate_id == Candidate.id)
+            .where(
+                ResumeFile.job_id == job_id,
+                ResumeFile.candidate_id == candidate_id,
+                ResumeFile.parse_status == "success",
+            )
+            .order_by(ResumeFile.created_at.desc())
+        )
+        row = self.db.execute(statement).first()
+        return (row[0], row[1]) if row else None
+
     def get_latest_resume_file_for_candidate(self, candidate_id: str) -> ResumeFile | None:
         statement = (
             select(ResumeFile)

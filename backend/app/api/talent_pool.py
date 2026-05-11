@@ -72,6 +72,8 @@ def add_candidate_to_talent_pool(
     job_id = payload.job_id or _latest_job_id_for_candidate(db, candidate_id)
     if not job_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="候选人暂无岗位关联，无法入库")
+    if not repository.get_candidate_for_job(job_id, candidate_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="候选人不属于该岗位")
     row = repository.set_candidate_status(job_id, candidate_id, "archived")
     V2Repository(db).create_timeline_event(
         CandidateTimelineEventCreate(
@@ -192,7 +194,7 @@ def _job_history(db: Session, candidate_id: str) -> list[CandidateJobHistoryItem
 def _latest_job_id_for_candidate(db: Session, candidate_id: str) -> str | None:
     row = db.scalars(
         select(ResumeFile)
-        .where(ResumeFile.candidate_id == candidate_id)
+        .where(ResumeFile.candidate_id == candidate_id, ResumeFile.parse_status == "success")
         .order_by(ResumeFile.created_at.desc())
     ).first()
     return row.job_id if row else None

@@ -99,12 +99,17 @@ def upload_text(test_client: TestClient, job_id: str, filename: str, content: st
     )
 
 
+def create_job(test_client: TestClient, title: str = "软件开发实习生") -> str:
+    payload = {**SAMPLE_JOB, "title": title}
+    response = test_client.post("/api/jobs", json=payload)
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
 def test_v2_acceptance_flow(client: TestClient):
     assert client.get("/api/dashboard").status_code == 200
 
-    job_response = client.post("/api/jobs", json=SAMPLE_JOB)
-    assert job_response.status_code == 201
-    job_id = job_response.json()["id"]
+    job_id = create_job(client)
 
     first_upload = upload_text(client, job_id, "后端开发-陈晓明.txt", RESUME_ONE)
     second_upload = upload_text(client, job_id, "前端开发-李思雨.txt", RESUME_TWO)
@@ -173,3 +178,68 @@ def test_v2_acceptance_flow(client: TestClient):
     candidate_payload = _candidate_payload(SimpleNamespace(**first_upload.json()["candidate"]))
     assert "phone" not in candidate_payload
     assert "email" not in candidate_payload
+
+
+def test_job_candidate_boundaries(client: TestClient):
+    job_a_id = create_job(client, "岗位 A")
+    job_b_id = create_job(client, "岗位 B")
+
+    upload_a = upload_text(client, job_a_id, "后端开发-陈晓明.txt", RESUME_ONE)
+    upload_b = upload_text(client, job_b_id, "前端开发-李思雨.txt", RESUME_TWO)
+    assert upload_a.status_code == 201
+    assert upload_b.status_code == 201
+    candidate_a_id = upload_a.json()["candidate"]["id"]
+    candidate_b_id = upload_b.json()["candidate"]["id"]
+
+    status_response = client.patch(
+        f"/api/jobs/{job_a_id}/candidates/{candidate_b_id}/status",
+        json={"status": "pending_contact"},
+    )
+    assert status_response.status_code == 404
+
+    match_response = client.post(f"/api/jobs/{job_a_id}/candidates/{candidate_b_id}/match")
+    assert match_response.status_code == 404
+
+    note_response = client.post(
+        f"/api/jobs/{job_a_id}/candidates/{candidate_b_id}/notes",
+        json={
+            "candidate_id": candidate_b_id,
+            "job_id": job_b_id,
+            "content": "不应写入",
+            "created_by": "acceptance",
+        },
+    )
+    assert note_response.status_code == 404
+
+    timeline_response = client.get(f"/api/jobs/{job_a_id}/candidates/{candidate_b_id}/timeline")
+    assert timeline_response.status_code == 404
+
+    bulk_status = client.post(
+        f"/api/jobs/{job_a_id}/candidates/bulk-status",
+        json={"candidate_ids": [candidate_a_id, candidate_b_id], "status": "pending_contact"},
+    )
+    assert bulk_status.status_code == 200
+    assert len(bulk_status.json()) == 1
+    assert bulk_status.json()[0]["candidate_id"] == candidate_a_id
+
+    bulk_match = client.post(
+        f"/api/jobs/{job_a_id}/candidates/bulk-match",
+        json={"candidate_ids": [candidate_a_id, candidate_b_id]},
+    )
+    assert bulk_match.status_code == 200
+    assert len(bulk_match.json()) == 1
+    assert bulk_match.json()[0]["candidate_id"] == candidate_a_id
+    assert client.get(f"/api/jobs/{job_a_id}/funnel").json()["high_match"] == 1
+
+    wrong_pool_response = client.post(
+        f"/api/candidates/{candidate_b_id}/talent-pool",
+        json={"job_id": job_a_id},
+    )
+    assert wrong_pool_response.status_code == 404
+
+    right_pool_response = client.post(
+        f"/api/candidates/{candidate_b_id}/talent-pool",
+        json={"job_id": job_b_id},
+    )
+    assert right_pool_response.status_code == 200
+    assert right_pool_response.json()["job_id"] == job_b_id
