@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw, Upload } from "lucide-react";
 
 import { EmptyState, Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
@@ -132,21 +132,23 @@ export default function UploadTasksPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <div className="data-grid-head grid-cols-[1.4fr_0.65fr_0.65fr_0.65fr_1fr_0.7fr]">
+            <div className="data-grid-head grid-cols-[1.4fr_0.6fr_0.6fr_0.6fr_0.6fr_1fr_0.7fr]">
               <span>文件</span>
               <span>上传</span>
               <span>解析</span>
               <span>评分</span>
+              <span>重复</span>
               <span>失败原因</span>
               <span>操作</span>
             </div>
             <div className="divide-y divide-border">
               {tasks.map((task) => (
-                <div key={task.id} className="data-grid-row grid-cols-[1.4fr_0.65fr_0.65fr_0.65fr_1fr_0.7fr]">
+                <div key={task.id} className="data-grid-row grid-cols-[1.4fr_0.6fr_0.6fr_0.6fr_0.6fr_1fr_0.7fr]">
                   <span className="min-w-0 truncate font-medium">{task.original_filename}</span>
                   <StatusText value={task.upload_status} />
                   <StatusText value={task.parse_status} />
                   <StatusText value={task.match_status} />
+                  <DuplicateStatus count={task.duplicate_count} />
                   <span className="min-w-0 truncate text-xs text-red-600">{task.error_message || "-"}</span>
                   <span>
                     {task.parse_status === "failed" || task.match_status === "failed" ? (
@@ -185,6 +187,16 @@ function StatusText({ value }: { value: string }) {
     skipped: "跳过",
   };
   return <span className={value === "failed" ? "text-red-600" : "text-muted-foreground"}>{labels[value] ?? value}</span>;
+}
+
+function DuplicateStatus({ count }: { count: number }) {
+  if (!count) return <span className="text-xs text-muted-foreground">无风险</span>;
+  return (
+    <span className="flex items-center gap-1 text-xs text-amber-700">
+      <AlertTriangle className="h-3.5 w-3.5" />
+      {count} 个
+    </span>
+  );
 }
 
 function Summary({ label, value }: { label: string; value: number }) {

@@ -72,6 +72,14 @@ class ResumeRepository:
         self.db.refresh(candidate)
         return candidate
 
+    def list_candidates_for_duplicate_check(self, candidate_id: str) -> list[Candidate]:
+        statement = (
+            select(Candidate)
+            .where(Candidate.id != candidate_id)
+            .order_by(Candidate.created_at.desc())
+        )
+        return list(self.db.scalars(statement).all())
+
     def update_resume_file(self, resume_file: ResumeFile) -> ResumeFile:
         self.db.add(resume_file)
         self.db.commit()

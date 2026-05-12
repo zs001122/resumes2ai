@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Loader2, PencilLine, RefreshCw } from "lucide-react";
+import { AlertTriangle, Clipboard, Download, FileText, Loader2, PencilLine, RefreshCw } from "lucide-react";
 
 import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
@@ -13,6 +13,7 @@ import {
   CandidateMatch,
   CandidateMatchExplanation,
   CandidateNote,
+  CandidateRecommendationReport,
   CandidateTag,
   CandidateTimelineEvent,
   addCandidateTag,
@@ -21,6 +22,7 @@ import {
   createCandidateNote,
   getCandidateDetail,
   getCandidateMatchExplanations,
+  getCandidateRecommendationReport,
   listCandidateJobHistory,
   listCandidateNotes,
   listCandidateTags,
@@ -45,6 +47,8 @@ export default function CandidateDetailPage() {
   const [explanations, setExplanations] = useState<CandidateMatchExplanation[]>([]);
   const [notes, setNotes] = useState<CandidateNote[]>([]);
   const [timeline, setTimeline] = useState<CandidateTimelineEvent[]>([]);
+  const [report, setReport] = useState<CandidateRecommendationReport | null>(null);
+  const [reportText, setReportText] = useState("");
   const [tags, setTags] = useState<CandidateTag[]>([]);
   const [jobHistory, setJobHistory] = useState<CandidateJobHistoryItem[]>([]);
   const [noteText, setNoteText] = useState("");
@@ -54,6 +58,8 @@ export default function CandidateDetailPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [savingTalentPool, setSavingTalentPool] = useState(false);
   const [savingTag, setSavingTag] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [copyingReport, setCopyingReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadDetail() {
@@ -164,6 +170,47 @@ export default function CandidateDetailPage() {
     }
   }
 
+  async function handleGenerateReport() {
+    setGeneratingReport(true);
+    setError(null);
+    try {
+      const generated = await getCandidateRecommendationReport(params.jobId, params.candidateId);
+      setReport(generated);
+      setReportText(generated.content);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "推荐摘要生成失败");
+    } finally {
+      setGeneratingReport(false);
+    }
+  }
+
+  async function handleCopyReport() {
+    if (!reportText.trim()) return;
+    setCopyingReport(true);
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(reportText);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "复制失败，请手动选择文本复制");
+    } finally {
+      setCopyingReport(false);
+    }
+  }
+
+  function handleDownloadReport() {
+    if (!reportText.trim() || !detail) return;
+    const blob = new Blob([reportText], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const name = detail.candidate.name || params.candidateId;
+    link.href = url;
+    link.download = `${name}-推荐摘要.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   useEffect(() => {
     void loadDetail();
   }, [params.jobId, params.candidateId]);
@@ -238,6 +285,30 @@ export default function CandidateDetailPage() {
               <Info label="工作年限" value={detail.candidate.years_of_experience?.toString()} />
               <Info label="最高学历" value={detail.candidate.highest_education} />
               <TagList title="技能" items={detail.candidate.skills} />
+            </Panel>
+
+            <Panel title="重复识别">
+              {detail.duplicate_candidates.length ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>疑似重复，仅供 HR 复核，不自动合并。</p>
+                  </div>
+                  {detail.duplicate_candidates.map((item) => (
+                    <div key={item.id} className="rounded-md border border-border px-3 py-3">
+                      <p className="text-sm font-semibold">{item.matched_candidate?.name || "姓名待确认"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.match_reason} / 置信度 {Math.round(item.confidence * 100)}%
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {item.matched_candidate?.phone || item.matched_candidate?.email || "联系方式待确认"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">暂无疑似重复记录。</p>
+              )}
             </Panel>
 
             <Panel title="人才库">
@@ -331,6 +402,37 @@ export default function CandidateDetailPage() {
                 <List title="面试问题" items={match.interview_questions} />
               </div>
             ) : null}
+
+            <Panel title="推荐摘要">
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => void handleGenerateReport()} disabled={generatingReport || !match} className="btn-primary">
+                  {generatingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                  生成推荐摘要
+                </button>
+                <button onClick={() => void handleCopyReport()} disabled={copyingReport || !reportText.trim()} className="btn-secondary">
+                  {copyingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clipboard className="h-4 w-4" />}
+                  复制 Markdown
+                </button>
+                <button onClick={handleDownloadReport} disabled={!reportText.trim()} className="btn-secondary">
+                  <Download className="h-4 w-4" />
+                  下载 .md
+                </button>
+              </div>
+              {!match ? (
+                <p className="mt-3 text-sm text-muted-foreground">请先生成匹配评分，再生成推荐摘要。</p>
+              ) : null}
+              {report ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  已生成 Markdown 草稿，可在导出前人工调整。
+                </p>
+              ) : null}
+              <textarea
+                className="input mt-4 min-h-96 resize-y font-mono text-sm leading-6"
+                placeholder="生成后可在这里编辑推荐摘要"
+                value={reportText}
+                onChange={(event) => setReportText(event.target.value)}
+              />
+            </Panel>
 
             <Panel title="原简历预览">
               <p className="mb-3 text-sm text-muted-foreground">{detail.resume_file.file_name}</p>

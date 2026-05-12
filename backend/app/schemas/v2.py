@@ -34,6 +34,8 @@ class UploadProcessingTaskRead(BaseModel):
     match_status: str
     error_message: str | None
     retry_count: int
+    duplicate_count: int = 0
+    has_duplicate_risk: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -55,6 +57,8 @@ class UploadProcessingTaskUpdate(BaseModel):
     match_status: str | None = None
     error_message: str | None = None
     retry_count: int | None = None
+    duplicate_count: int | None = None
+    has_duplicate_risk: bool | None = None
 
 
 class CandidateMatchExplanationRead(BaseModel):

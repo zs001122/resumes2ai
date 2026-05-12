@@ -14,6 +14,11 @@ class CandidateMatch(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     job_id: Mapped[str] = mapped_column(String(36), ForeignKey("jobs.id"), nullable=False)
     candidate_id: Mapped[str] = mapped_column(String(36), ForeignKey("candidates.id"), nullable=False)
+    job_standard_version_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("job_standard_versions.id"),
+        nullable=True,
+    )
     score: Mapped[float] = mapped_column(Float, nullable=False)
     level: Mapped[str] = mapped_column(String(40), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)

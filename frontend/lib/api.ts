@@ -80,10 +80,25 @@ export type ResumeFieldExtraction = {
   created_at: string;
 };
 
+export type DuplicateCandidate = {
+  id: string;
+  candidate_id: string;
+  job_id: string;
+  resume_file_id: string;
+  matched_candidate_id: string;
+  match_reason: string;
+  confidence: number;
+  status: string;
+  created_at: string;
+  matched_candidate: Candidate | null;
+};
+
 export type ResumeUploadResult = {
   resume_file: ResumeFile;
   candidate: Candidate | null;
   field_extractions: ResumeFieldExtraction[];
+  duplicate_candidates: DuplicateCandidate[];
+  duplicate_policy: string;
 };
 
 export type FieldCorrectionLog = {
@@ -101,6 +116,7 @@ export type CandidateMatch = {
   id: string;
   job_id: string;
   candidate_id: string;
+  job_standard_version_id: string | null;
   score: number;
   level: string;
   summary: string;
@@ -108,6 +124,15 @@ export type CandidateMatch = {
   weak_points: string[];
   risks: string[];
   interview_questions: string[];
+  created_at: string;
+};
+
+export type JobStandardVersion = {
+  id: string;
+  job_id: string;
+  version: number;
+  criteria_json: Record<string, unknown>;
+  change_summary: string;
   created_at: string;
 };
 
@@ -120,6 +145,13 @@ export type CandidateMatchExplanation = {
   evidence_text: string | null;
   confidence: number | null;
   created_at: string;
+};
+
+export type CandidateRecommendationReport = {
+  candidate_id: string;
+  job_id: string;
+  format: "markdown" | string;
+  content: string;
 };
 
 export type CandidateNote = {
@@ -209,6 +241,7 @@ export type CandidateDetail = CandidateListItem & {
   };
   field_extractions: ResumeFieldExtraction[];
   correction_logs: FieldCorrectionLog[];
+  duplicate_candidates: DuplicateCandidate[];
 };
 
 export type JobListItem = {
@@ -287,6 +320,8 @@ export type UploadProcessingTask = {
   match_status: string;
   error_message: string | null;
   retry_count: number;
+  duplicate_count: number;
+  has_duplicate_risk: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -380,11 +415,33 @@ export async function getJDQuality(jobId: string) {
   return requestJson<JDQualityCheck>(`/api/jobs/${jobId}/jd-quality`);
 }
 
+export async function listJobStandardVersions(jobId: string) {
+  return requestJson<JobStandardVersion[]>(`/api/jobs/${jobId}/standard-versions`);
+}
+
 export async function uploadResume(jobId: string, file: File) {
   const formData = new FormData();
   formData.append("file", file);
 
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/resumes/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(normalizeApiError(errorText, `Upload failed: ${response.status}`));
+  }
+
+  return response.json() as Promise<ResumeUploadResult>;
+}
+
+export async function uploadResumeWithJob(jobId: string, file: File) {
+  const formData = new FormData();
+  formData.append("job_id", jobId);
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/api/resumes/upload`, {
     method: "POST",
     body: formData,
   });
@@ -442,6 +499,12 @@ export async function getCandidateMatch(jobId: string, candidateId: string) {
 
 export async function getCandidateMatchExplanations(jobId: string, candidateId: string) {
   return requestJson<CandidateMatchExplanation[]>(`/api/jobs/${jobId}/candidates/${candidateId}/match/explanations`);
+}
+
+export async function getCandidateRecommendationReport(jobId: string, candidateId: string) {
+  return requestJson<CandidateRecommendationReport>(
+    `/api/jobs/${jobId}/candidates/${candidateId}/match/recommendation-report`,
+  );
 }
 
 export async function listCandidateNotes(jobId: string, candidateId: string) {

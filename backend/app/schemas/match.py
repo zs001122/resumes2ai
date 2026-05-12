@@ -9,6 +9,7 @@ class CandidateMatchRead(BaseModel):
     id: str
     job_id: str
     candidate_id: str
+    job_standard_version_id: str | None = None
     score: float
     level: str
     summary: str
@@ -27,3 +28,10 @@ class CandidateMatchCreate(BaseModel):
     weak_points: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
     interview_questions: list[str] = Field(default_factory=list)
+
+
+class CandidateRecommendationReport(BaseModel):
+    candidate_id: str
+    job_id: str
+    format: str = "markdown"
+    content: str

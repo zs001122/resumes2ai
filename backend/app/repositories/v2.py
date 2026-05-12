@@ -2,11 +2,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.v2 import (
+    CandidateDuplicateCheck,
     CandidateMatchExplanation,
     CandidateNote,
     CandidateTag,
     CandidateTagLink,
     CandidateTimelineEvent,
+    JobStandardVersion,
     UploadProcessingTask,
 )
 from app.schemas.v2 import (
@@ -74,6 +76,71 @@ class V2Repository:
         self.db.commit()
         self.db.refresh(task)
         return task
+
+    def create_duplicate_check(
+        self,
+        candidate_id: str,
+        job_id: str,
+        resume_file_id: str,
+        matched_candidate_id: str,
+        match_reason: str,
+        confidence: float,
+    ) -> CandidateDuplicateCheck:
+        row = CandidateDuplicateCheck(
+            candidate_id=candidate_id,
+            job_id=job_id,
+            resume_file_id=resume_file_id,
+            matched_candidate_id=matched_candidate_id,
+            match_reason=match_reason,
+            confidence=confidence,
+            status="pending_review",
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
+    def list_duplicate_checks_for_candidate(self, candidate_id: str) -> list[CandidateDuplicateCheck]:
+        statement = (
+            select(CandidateDuplicateCheck)
+            .where(CandidateDuplicateCheck.candidate_id == candidate_id)
+            .order_by(CandidateDuplicateCheck.created_at.desc())
+        )
+        return list(self.db.scalars(statement).all())
+
+    def create_job_standard_version(
+        self,
+        job_id: str,
+        criteria_json: dict,
+        change_summary: str,
+    ) -> JobStandardVersion:
+        latest = self.get_latest_job_standard_version(job_id)
+        row = JobStandardVersion(
+            job_id=job_id,
+            version=(latest.version + 1) if latest else 1,
+            criteria_json=criteria_json,
+            change_summary=change_summary,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
+    def get_latest_job_standard_version(self, job_id: str) -> JobStandardVersion | None:
+        statement = (
+            select(JobStandardVersion)
+            .where(JobStandardVersion.job_id == job_id)
+            .order_by(JobStandardVersion.version.desc())
+        )
+        return self.db.scalars(statement).first()
+
+    def list_job_standard_versions(self, job_id: str) -> list[JobStandardVersion]:
+        statement = (
+            select(JobStandardVersion)
+            .where(JobStandardVersion.job_id == job_id)
+            .order_by(JobStandardVersion.version.desc())
+        )
+        return list(self.db.scalars(statement).all())
 
     def replace_match_explanations(
         self,

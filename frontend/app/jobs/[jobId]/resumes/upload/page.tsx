@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FileText, Loader2, PencilLine, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Loader2, PencilLine, RefreshCw, Upload } from "lucide-react";
 
 import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
@@ -210,21 +210,23 @@ export default function ResumeUploadPage() {
             <h2 className="text-base font-semibold">上传处理队列</h2>
           </div>
           <div className="overflow-x-auto">
-            <div className="data-grid-head grid-cols-[1.4fr_0.65fr_0.65fr_0.65fr_1fr_0.7fr]">
+            <div className="data-grid-head grid-cols-[1.4fr_0.6fr_0.6fr_0.6fr_0.6fr_1fr_0.7fr]">
               <span>文件</span>
               <span>上传</span>
               <span>解析</span>
               <span>评分</span>
+              <span>重复</span>
               <span>失败原因</span>
               <span>操作</span>
             </div>
             <div className="divide-y divide-border">
               {tasks.map((task) => (
-                <div key={task.id} className="data-grid-row grid-cols-[1.4fr_0.65fr_0.65fr_0.65fr_1fr_0.7fr]">
+                <div key={task.id} className="data-grid-row grid-cols-[1.4fr_0.6fr_0.6fr_0.6fr_0.6fr_1fr_0.7fr]">
                   <span className="min-w-0 truncate font-medium">{task.original_filename}</span>
                   <StatusText value={task.upload_status} />
                   <StatusText value={task.parse_status} />
                   <StatusText value={task.match_status} />
+                  <DuplicateStatus count={task.duplicate_count} />
                   <span className="min-w-0 truncate text-xs text-red-600">{task.error_message || "-"}</span>
                   <span>
                     {task.parse_status === "failed" || task.match_status === "failed" ? (
@@ -257,16 +259,17 @@ export default function ResumeUploadPage() {
             <h2 className="text-base font-semibold">解析结果</h2>
           </div>
           <div className="overflow-x-auto">
-            <div className="data-grid-head grid-cols-[1.4fr_0.7fr_0.8fr_0.8fr_0.9fr]">
+            <div className="data-grid-head grid-cols-[1.4fr_0.65fr_0.75fr_0.75fr_0.75fr_0.9fr]">
               <span>文件</span>
               <span>状态</span>
               <span>姓名</span>
               <span>手机号</span>
+              <span>重复识别</span>
               <span>操作</span>
             </div>
             <div className="divide-y divide-border">
               {results.map((result) => (
-                <div key={result.resume_file.id} className="data-grid-row grid-cols-[1.4fr_0.7fr_0.8fr_0.8fr_0.9fr]">
+                <div key={result.resume_file.id} className="data-grid-row grid-cols-[1.4fr_0.65fr_0.75fr_0.75fr_0.75fr_0.9fr]">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{result.resume_file.file_name}</p>
                     {result.resume_file.parse_error ? (
@@ -279,6 +282,7 @@ export default function ResumeUploadPage() {
                   </span>
                   <span className="text-muted-foreground">{result.candidate?.name || "待确认"}</span>
                   <span className="text-muted-foreground">{result.candidate?.phone || "待确认"}</span>
+                  <DuplicateStatus count={result.duplicate_candidates.length} />
                   <span>
                     {result.candidate ? (
                       <Link href={`/jobs/${params.jobId}/candidates/${result.candidate.id}/review`} className="btn-secondary h-9 text-xs">
@@ -316,6 +320,16 @@ function StatusText({ value }: { value: string }) {
   };
   const isFailed = value === "failed";
   return <span className={isFailed ? "text-red-600" : "text-muted-foreground"}>{labels[value] ?? value}</span>;
+}
+
+function DuplicateStatus({ count }: { count: number }) {
+  if (!count) return <span className="text-xs text-muted-foreground">无风险</span>;
+  return (
+    <span className="flex items-center gap-1 text-xs text-amber-700">
+      <AlertTriangle className="h-3.5 w-3.5" />
+      {count} 个
+    </span>
+  );
 }
 
 function Summary({ label, value }: { label: string; value: number }) {

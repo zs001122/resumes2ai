@@ -92,3 +92,14 @@ class JDQualityCheck(BaseModel):
     score: int = Field(..., ge=0, le=100)
     issues: list[str] = Field(default_factory=list)
     suggestions: list[str] = Field(default_factory=list)
+
+
+class JobStandardVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    job_id: str
+    version: int
+    criteria_json: dict
+    change_summary: str
+    created_at: datetime

@@ -8,11 +8,13 @@ import {
   Archive,
   BriefcaseBusiness,
   LayoutDashboard,
+  Upload,
 } from "lucide-react";
 
 const navItems = [
   { label: "总览", href: "/dashboard", icon: LayoutDashboard },
   { label: "岗位", href: "/jobs", icon: BriefcaseBusiness },
+  { label: "上传", href: "/resumes/upload", icon: Upload },
   { label: "人才库", href: "/talent-pool", icon: Archive },
 ];
 

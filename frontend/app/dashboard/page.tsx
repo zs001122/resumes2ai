@@ -67,6 +67,10 @@ export default function DashboardPage() {
             <Plus className="h-4 w-4" />
             创建岗位
           </Link>
+          <Link href="/resumes/upload" className="btn-secondary">
+            <Upload className="h-4 w-4" />
+            上传简历
+          </Link>
         </>
       }
     >

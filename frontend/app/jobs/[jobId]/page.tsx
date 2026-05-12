@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Copy, ListFilter, Loader2, Pause, Play, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, Copy, History, ListFilter, Loader2, Pause, Play, RefreshCw, Upload } from "lucide-react";
 
 import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
@@ -15,6 +15,8 @@ import {
   Job,
   JDQualityCheck,
   JobFunnelStats,
+  JobStandardVersion,
+  listJobStandardVersions,
   pauseJob,
   reopenJob,
 } from "@/lib/api";
@@ -35,6 +37,7 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [funnel, setFunnel] = useState<JobFunnelStats | null>(null);
   const [quality, setQuality] = useState<JDQualityCheck | null>(null);
+  const [standardVersions, setStandardVersions] = useState<JobStandardVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
@@ -48,6 +51,7 @@ export default function JobDetailPage() {
       setJob(loadedJob);
       setFunnel(await getJobFunnel(params.jobId));
       setQuality(await getJDQuality(params.jobId));
+      setStandardVersions(await listJobStandardVersions(params.jobId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "岗位详情加载失败");
     } finally {
@@ -147,7 +151,7 @@ export default function JobDetailPage() {
                 暂停
               </button>
             ) : null}
-            {job.status !== "open" ? (
+            {job.status === "paused" ? (
               <button onClick={() => void handleReopen()} disabled={statusSaving} className="btn-secondary">
                 {statusSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 重新开放
@@ -210,6 +214,29 @@ export default function JobDetailPage() {
               </div>
             </section>
 
+            <section className="panel p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-base font-semibold">标准版本</h2>
+                <History className="h-4 w-4 text-muted-foreground" />
+              </div>
+              {standardVersions.length ? (
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-md bg-muted px-3 py-3">
+                    <p className="text-sm font-semibold">当前版本 v{standardVersions[0].version}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{standardVersions[0].change_summary}</p>
+                  </div>
+                  {standardVersions.length > 1 ? (
+                    <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <p>岗位标准已变更，建议对历史候选人重新评分以保持口径一致。</p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-muted-foreground">暂无版本记录。</p>
+              )}
+            </section>
+
             {quality ? (
               <section className="panel p-5">
                 <h2 className="text-base font-semibold">JD 质量</h2>
@@ -259,6 +286,25 @@ export default function JobDetailPage() {
               <ListPanel title="加分条件" items={job.nice_to_have} />
               <ListPanel title="排除条件" items={job.deal_breakers} />
               <ListPanel title="评分维度" items={job.scoring_dimensions} />
+            </div>
+
+            <div className="panel p-5">
+              <h2 className="text-base font-semibold">版本历史</h2>
+              {standardVersions.length ? (
+                <div className="mt-4 divide-y divide-border rounded-md border border-border">
+                  {standardVersions.map((version) => (
+                    <div key={version.id} className="px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold">v{version.version}</p>
+                        <time className="text-xs text-muted-foreground">{formatDate(version.created_at)}</time>
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">{version.change_summary}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-muted-foreground">暂无版本历史。</p>
+              )}
             </div>
           </section>
         </div>

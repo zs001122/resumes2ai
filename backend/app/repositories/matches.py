@@ -17,8 +17,19 @@ class CandidateMatchRepository:
         )
         return self.db.scalars(statement).first()
 
-    def create(self, job_id: str, candidate_id: str, payload: CandidateMatchCreate) -> CandidateMatch:
-        row = CandidateMatch(job_id=job_id, candidate_id=candidate_id, **payload.model_dump())
+    def create(
+        self,
+        job_id: str,
+        candidate_id: str,
+        payload: CandidateMatchCreate,
+        job_standard_version_id: str | None = None,
+    ) -> CandidateMatch:
+        row = CandidateMatch(
+            job_id=job_id,
+            candidate_id=candidate_id,
+            job_standard_version_id=job_standard_version_id,
+            **payload.model_dump(),
+        )
         self.db.add(row)
         self.db.commit()
         self.db.refresh(row)

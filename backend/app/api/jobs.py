@@ -8,6 +8,8 @@ from app.models.match import CandidateMatch
 from app.models.resume import ResumeFile
 from app.models.status import CandidateJobStatus
 from app.repositories.jobs import JobRepository
+from app.repositories.jobs import changed_standard_fields, job_standard_criteria
+from app.repositories.v2 import V2Repository
 from app.schemas.job import (
     JDParseRequest,
     JDParseResult,
@@ -16,6 +18,7 @@ from app.schemas.job import (
     JobFunnelStats,
     JobListItem,
     JobRead,
+    JobStandardVersionRead,
     JobUpdate,
 )
 from app.services.jobs import check_jd_quality, parse_jd_locally
@@ -40,6 +43,7 @@ def list_jobs(
 @router.post("", response_model=JobRead, status_code=status.HTTP_201_CREATED)
 def create_job(payload: JobCreate, db: Session = Depends(get_db)) -> JobRead:
     job = JobRepository(db).create(payload)
+    V2Repository(db).create_job_standard_version(job.id, job_standard_criteria(job), "创建岗位初始标准")
     return JobRead.model_validate(job)
 
 
@@ -57,7 +61,17 @@ def update_job(job_id: str, payload: JobUpdate, db: Session = Depends(get_db)) -
     job = repository.get(job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
-    return JobRead.model_validate(repository.update(job, payload))
+    if job.status == "closed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="已关闭岗位不能编辑，请复制岗位后修改")
+    standard_changes = changed_standard_fields(job, payload)
+    updated = repository.update(job, payload)
+    if standard_changes:
+        V2Repository(db).create_job_standard_version(
+            updated.id,
+            job_standard_criteria(updated),
+            f"更新岗位标准：{', '.join(standard_changes)}",
+        )
+    return JobRead.model_validate(updated)
 
 
 @router.post("/{job_id}/close", response_model=JobRead)
@@ -75,7 +89,9 @@ def copy_job(job_id: str, db: Session = Depends(get_db)) -> JobRead:
     job = repository.get(job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
-    return JobRead.model_validate(repository.copy(job))
+    copied = repository.copy(job)
+    V2Repository(db).create_job_standard_version(copied.id, job_standard_criteria(copied), "复制岗位初始标准")
+    return JobRead.model_validate(copied)
 
 
 @router.post("/{job_id}/pause", response_model=JobRead)
@@ -93,6 +109,8 @@ def reopen_job(job_id: str, db: Session = Depends(get_db)) -> JobRead:
     job = repository.get(job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    if job.status == "closed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="已关闭岗位不能重新开放，请复制岗位后修改")
     return JobRead.model_validate(repository.set_status(job, "open"))
 
 
@@ -142,3 +160,11 @@ def get_jd_quality(job_id: str, db: Session = Depends(get_db)) -> JDQualityCheck
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
     return check_jd_quality(job)
+
+
+@router.get("/{job_id}/standard-versions", response_model=list[JobStandardVersionRead])
+def list_job_standard_versions(job_id: str, db: Session = Depends(get_db)) -> list[JobStandardVersionRead]:
+    if not JobRepository(db).get(job_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    rows = V2Repository(db).list_job_standard_versions(job_id)
+    return [JobStandardVersionRead.model_validate(row) for row in rows]

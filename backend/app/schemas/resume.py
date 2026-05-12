@@ -74,10 +74,27 @@ class ResumeFieldExtractionRead(BaseModel):
     created_at: datetime
 
 
+class DuplicateCandidateRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    candidate_id: str
+    job_id: str
+    resume_file_id: str
+    matched_candidate_id: str
+    match_reason: str
+    confidence: float
+    status: str
+    created_at: datetime
+    matched_candidate: CandidateRead | None = None
+
+
 class ResumeUploadResult(BaseModel):
     resume_file: ResumeFileRead
     candidate: CandidateRead | None
     field_extractions: list[ResumeFieldExtractionRead]
+    duplicate_candidates: list[DuplicateCandidateRead] = []
+    duplicate_policy: str = "created_new"
 
 
 class ResumePreview(BaseModel):
@@ -143,3 +160,4 @@ class CandidateDetail(CandidateListItem):
     preview: ResumePreview
     field_extractions: list[ResumeFieldExtractionRead]
     correction_logs: list[FieldCorrectionLogRead]
+    duplicate_candidates: list[DuplicateCandidateRead] = []

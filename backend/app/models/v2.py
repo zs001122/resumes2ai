@@ -20,6 +20,8 @@ class UploadProcessingTask(Base):
     match_status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    duplicate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    has_duplicate_risk: Mapped[bool] = mapped_column(nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
@@ -59,6 +61,31 @@ class CandidateTimelineEvent(Base):
     before_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     after_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class CandidateDuplicateCheck(Base):
+    __tablename__ = "candidate_duplicate_checks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    candidate_id: Mapped[str] = mapped_column(String(36), ForeignKey("candidates.id"), nullable=False)
+    job_id: Mapped[str] = mapped_column(String(36), ForeignKey("jobs.id"), nullable=False)
+    resume_file_id: Mapped[str] = mapped_column(String(36), ForeignKey("resume_files.id"), nullable=False)
+    matched_candidate_id: Mapped[str] = mapped_column(String(36), ForeignKey("candidates.id"), nullable=False)
+    match_reason: Mapped[str] = mapped_column(String(120), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending_review")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class JobStandardVersion(Base):
+    __tablename__ = "job_standard_versions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    job_id: Mapped[str] = mapped_column(String(36), ForeignKey("jobs.id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    criteria_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    change_summary: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 

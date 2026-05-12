@@ -99,6 +99,14 @@ def upload_text(test_client: TestClient, job_id: str, filename: str, content: st
     )
 
 
+def upload_text_with_job_field(test_client: TestClient, job_id: str, filename: str, content: str):
+    return test_client.post(
+        "/api/resumes/upload",
+        data={"job_id": job_id},
+        files={"file": (filename, content.encode("utf-8"), "text/plain")},
+    )
+
+
 def create_job(test_client: TestClient, title: str = "软件开发实习生") -> str:
     payload = {**SAMPLE_JOB, "title": title}
     response = test_client.post("/api/jobs", json=payload)
@@ -110,6 +118,9 @@ def test_v2_acceptance_flow(client: TestClient):
     assert client.get("/api/dashboard").status_code == 200
 
     job_id = create_job(client)
+    versions = client.get(f"/api/jobs/{job_id}/standard-versions")
+    assert versions.status_code == 200
+    assert versions.json()[0]["version"] == 1
 
     first_upload = upload_text(client, job_id, "后端开发-陈晓明.txt", RESUME_ONE)
     second_upload = upload_text(client, job_id, "前端开发-李思雨.txt", RESUME_TWO)
@@ -148,6 +159,15 @@ def test_v2_acceptance_flow(client: TestClient):
     explanations_response = client.get(f"/api/jobs/{job_id}/candidates/{candidate_id}/match/explanations")
     assert explanations_response.status_code == 200
     assert explanations_response.json()
+    latest_match = client.get(f"/api/jobs/{job_id}/candidates/{candidate_id}/match").json()
+    assert latest_match["job_standard_version_id"] == versions.json()[0]["id"]
+    report_response = client.get(f"/api/jobs/{job_id}/candidates/{candidate_id}/match/recommendation-report")
+    assert report_response.status_code == 200
+    report_content = report_response.json()["content"]
+    assert "# 候选人推荐摘要" in report_content
+    assert "匹配分" in report_content
+    assert "13800138001" not in report_content
+    assert "chen@example.com" not in report_content
 
     note_response = client.post(
         f"/api/jobs/{job_id}/candidates/{candidate_id}/notes",
@@ -172,8 +192,15 @@ def test_v2_acceptance_flow(client: TestClient):
     assert client.get(f"/api/jobs/{job_id}/jd-quality").status_code == 200
     assert client.post(f"/api/jobs/{job_id}/copy").status_code == 201
     assert client.post(f"/api/jobs/{job_id}/pause").json()["status"] == "paused"
+    updated_job = client.patch(f"/api/jobs/{job_id}", json={"must_have": ["Python", "React", "SQL", "FastAPI"]})
+    assert updated_job.status_code == 200
+    updated_versions = client.get(f"/api/jobs/{job_id}/standard-versions").json()
+    assert len(updated_versions) == 2
+    assert updated_versions[0]["version"] == 2
     assert client.post(f"/api/jobs/{job_id}/reopen").json()["status"] == "open"
     assert client.post(f"/api/jobs/{job_id}/close").json()["status"] == "closed"
+    assert client.patch(f"/api/jobs/{job_id}", json={"title": "关闭后修改"}).status_code == 400
+    assert client.post(f"/api/jobs/{job_id}/reopen").status_code == 400
 
     candidate_payload = _candidate_payload(SimpleNamespace(**first_upload.json()["candidate"]))
     assert "phone" not in candidate_payload
@@ -243,3 +270,24 @@ def test_job_candidate_boundaries(client: TestClient):
     )
     assert right_pool_response.status_code == 200
     assert right_pool_response.json()["job_id"] == job_b_id
+
+
+def test_unified_upload_detects_duplicate_candidates(client: TestClient):
+    job_id = create_job(client)
+
+    first_upload = upload_text(client, job_id, "后端开发-陈晓明.txt", RESUME_ONE)
+    duplicate_upload = upload_text_with_job_field(client, job_id, "陈晓明-重复.txt", RESUME_ONE)
+
+    assert first_upload.status_code == 201
+    assert duplicate_upload.status_code == 201
+    payload = duplicate_upload.json()
+    assert payload["resume_file"]["job_id"] == job_id
+    assert payload["duplicate_policy"] == "created_new"
+    assert payload["duplicate_candidates"]
+    assert payload["duplicate_candidates"][0]["match_reason"] == "手机号完全匹配"
+
+    tasks = client.get(f"/api/jobs/{job_id}/upload-tasks").json()
+    duplicate_tasks = [task for task in tasks if task["original_filename"] == "陈晓明-重复.txt"]
+    assert duplicate_tasks
+    assert duplicate_tasks[0]["has_duplicate_risk"] is True
+    assert duplicate_tasks[0]["duplicate_count"] == 1

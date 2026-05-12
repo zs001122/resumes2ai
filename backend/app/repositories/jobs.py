@@ -4,6 +4,15 @@ from sqlalchemy.orm import Session
 from app.models.job import Job
 from app.schemas.job import JobCreate, JobUpdate
 
+STANDARD_FIELDS = {
+    "jd",
+    "responsibilities",
+    "must_have",
+    "nice_to_have",
+    "deal_breakers",
+    "scoring_dimensions",
+}
+
 
 class JobRepository:
     def __init__(self, db: Session) -> None:
@@ -63,3 +72,23 @@ class JobRepository:
         self.db.commit()
         self.db.refresh(copied)
         return copied
+
+
+def job_standard_criteria(job: Job) -> dict:
+    return {
+        "jd": job.jd,
+        "responsibilities": job.responsibilities,
+        "must_have": job.must_have,
+        "nice_to_have": job.nice_to_have,
+        "deal_breakers": job.deal_breakers,
+        "scoring_dimensions": job.scoring_dimensions,
+    }
+
+
+def changed_standard_fields(job: Job, payload: JobUpdate) -> list[str]:
+    changed = []
+    data = payload.model_dump(exclude_unset=True)
+    for key in STANDARD_FIELDS & data.keys():
+        if getattr(job, key) != data[key]:
+            changed.append(key)
+    return changed
