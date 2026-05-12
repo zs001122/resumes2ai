@@ -8,7 +8,7 @@ from app.db.session import get_db
 from app.models.candidate import Candidate
 from app.models.correction import FieldCorrectionLog
 from app.models.resume import ResumeFieldExtraction, ResumeFile
-from app.repositories.jobs import JobRepository
+from app.repositories.jobs import JobRepository, job_standard_criteria
 from app.repositories.matches import CandidateMatchRepository
 from app.repositories.resumes import ResumeRepository
 from app.repositories.v2 import V2Repository
@@ -20,6 +20,9 @@ from app.schemas.resume import (
     DuplicateCandidateRead,
     CandidateReviewData,
     CandidateBulkActionRequest,
+    CandidateRematchFailure,
+    CandidateRematchRequest,
+    CandidateRematchResult,
     CandidateBulkStatusUpdate,
     CandidateStatusRead,
     CandidateStatusUpdate,
@@ -124,16 +127,7 @@ async def _upload_resume_for_job(db: Session, job_id: str, file: UploadFile) -> 
     result = _parse_and_save_resume(repository, resume_file, original_path)
     task = _sync_task_after_parse(v2_repository, task, result)
     if result.candidate:
-        duplicate_rows = _create_duplicate_checks(repository, v2_repository, result)
-        result.duplicate_candidates = _duplicate_reads(repository, duplicate_rows)
-        if duplicate_rows:
-            task = v2_repository.update_upload_task(
-                task,
-                UploadProcessingTaskUpdate(
-                    duplicate_count=len(duplicate_rows),
-                    has_duplicate_risk=True,
-                ),
-            )
+        task = _sync_duplicate_checks(repository, v2_repository, result, task)
         job = JobRepository(db).get(job_id)
         candidate = repository.get_candidate(result.candidate.id)
         if job and candidate:
@@ -245,7 +239,9 @@ def parse_resume_file(resume_file_id: str, db: Session = Depends(get_db)) -> Res
     v2_repository = V2Repository(db)
     task = v2_repository.get_upload_task_for_resume_file(resume_file_id)
     if task:
-        _sync_task_after_parse(v2_repository, task, result)
+        task = _sync_task_after_parse(v2_repository, task, result)
+        if result.candidate:
+            _sync_duplicate_checks(repository, v2_repository, result, task)
     return result
 
 
@@ -406,6 +402,69 @@ async def bulk_create_candidate_matches(
             )
         )
     return [CandidateMatchRead.model_validate(row) for row in rows]
+
+
+@router.post("/jobs/{job_id}/candidates/rematch", response_model=CandidateRematchResult)
+async def rematch_job_candidates(
+    job_id: str,
+    payload: CandidateRematchRequest,
+    db: Session = Depends(get_db),
+) -> CandidateRematchResult:
+    job = JobRepository(db).get(job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+
+    repository = ResumeRepository(db)
+    match_repository = CandidateMatchRepository(db)
+    v2_repository = V2Repository(db)
+    version = v2_repository.get_latest_job_standard_version(job_id)
+    if not version:
+        version = v2_repository.create_job_standard_version(job_id, job_standard_criteria(job), "补建岗位初始标准")
+
+    requested_ids = set(payload.candidate_ids or [])
+    candidate_rows = repository.list_candidates_by_job(job_id)
+    if requested_ids:
+        candidate_rows = [(candidate, resume_file) for candidate, resume_file in candidate_rows if candidate.id in requested_ids]
+
+    matches = []
+    failures: list[CandidateRematchFailure] = []
+    for candidate, _resume_file in candidate_rows:
+        try:
+            match_payload = await generate_candidate_match(job, candidate)
+            row = match_repository.create(
+                job_id,
+                candidate.id,
+                match_payload,
+                job_standard_version_id=version.id,
+            )
+            v2_repository.replace_match_explanations(row.id, build_match_explanations(row, candidate))
+            matches.append(row)
+            v2_repository.create_timeline_event(
+                CandidateTimelineEventCreate(
+                    candidate_id=candidate.id,
+                    job_id=job_id,
+                    action_type=TimelineActionType.BULK_ACTION,
+                    action_summary="按最新岗位标准重新评分",
+                    after_value=match_payload.level,
+                    metadata_json={"job_standard_version_id": version.id, "version": version.version},
+                )
+            )
+        except Exception as exc:
+            failures.append(CandidateRematchFailure(candidate_id=candidate.id, reason=f"评分失败：{exc}"))
+
+    missing_ids = requested_ids - {candidate.id for candidate, _resume_file in candidate_rows}
+    for candidate_id in sorted(missing_ids):
+        failures.append(CandidateRematchFailure(candidate_id=candidate_id, reason="候选人不属于当前岗位"))
+
+    return CandidateRematchResult(
+        job_id=job_id,
+        job_standard_version_id=version.id,
+        total=len(candidate_rows) + len(missing_ids),
+        succeeded=len(matches),
+        failed=len(failures),
+        matches=[CandidateMatchRead.model_validate(row) for row in matches],
+        failures=failures,
+    )
 
 
 @router.get("/jobs/{job_id}/candidates/{candidate_id}/notes", response_model=list[CandidateNoteRead])
@@ -686,6 +745,8 @@ async def _retry_upload_task(db: Session, task_id: str):
     if task.parse_status == "failed":
         result = _parse_and_save_resume(repository, resume_file, LocalStorageService().resolve(resume_file.file_path))
         task = _sync_task_after_parse(v2_repository, task, result)
+        if result.candidate:
+            task = _sync_duplicate_checks(repository, v2_repository, result, task)
 
     resume_file = repository.get_resume_file(resume_file.id)
     if resume_file and resume_file.candidate_id and task.match_status == "failed":
@@ -767,8 +828,10 @@ def _create_duplicate_checks(
         if not match or existing.id in seen:
             continue
         reason, confidence = match
+        existing_check = v2_repository.get_duplicate_check(candidate.id, result.resume_file.id, existing.id)
         checks.append(
-            v2_repository.create_duplicate_check(
+            existing_check
+            or v2_repository.create_duplicate_check(
                 candidate_id=candidate.id,
                 job_id=result.resume_file.job_id,
                 resume_file_id=result.resume_file.id,
@@ -779,6 +842,25 @@ def _create_duplicate_checks(
         )
         seen.add(existing.id)
     return checks
+
+
+def _sync_duplicate_checks(
+    repository: ResumeRepository,
+    v2_repository: V2Repository,
+    result: ResumeUploadResult,
+    task=None,
+):
+    duplicate_rows = _create_duplicate_checks(repository, v2_repository, result)
+    result.duplicate_candidates = _duplicate_reads(repository, duplicate_rows)
+    if task:
+        task = v2_repository.update_upload_task(
+            task,
+            UploadProcessingTaskUpdate(
+                duplicate_count=len(duplicate_rows),
+                has_duplicate_risk=bool(duplicate_rows),
+            ),
+        )
+    return task
 
 
 def _duplicate_match(candidate: Candidate, existing: Candidate) -> tuple[str, float] | None:

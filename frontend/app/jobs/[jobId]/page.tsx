@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AlertTriangle, Copy, History, ListFilter, Loader2, Pause, Play, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, Copy, History, ListFilter, Loader2, Pause, PencilLine, Play, RefreshCw, Upload } from "lucide-react";
 
 import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
@@ -18,6 +18,7 @@ import {
   JobStandardVersion,
   listJobStandardVersions,
   pauseJob,
+  rematchJobCandidates,
   reopenJob,
 } from "@/lib/api";
 
@@ -41,7 +42,9 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [rematching, setRematching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function loadJob() {
     setLoading(true);
@@ -112,6 +115,21 @@ export default function JobDetailPage() {
     }
   }
 
+  async function handleRematchAll() {
+    setRematching(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await rematchJobCandidates(params.jobId);
+      setNotice(`重新评分完成：成功 ${result.succeeded} 人，失败 ${result.failed} 人。`);
+      await loadJob();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量重新评分失败");
+    } finally {
+      setRematching(false);
+    }
+  }
+
   useEffect(() => {
     void loadJob();
   }, [params.jobId]);
@@ -141,6 +159,12 @@ export default function JobDetailPage() {
               <ListFilter className="h-4 w-4" />
               候选人
             </Link>
+            {job.status !== "closed" ? (
+              <Link href={`/jobs/${job.id}/edit`} className="btn-secondary">
+                <PencilLine className="h-4 w-4" />
+                编辑岗位
+              </Link>
+            ) : null}
             <button onClick={() => void handleCopy()} disabled={statusSaving} className="btn-secondary">
               <Copy className="h-4 w-4" />
               复制岗位
@@ -179,6 +203,7 @@ export default function JobDetailPage() {
           {error}
         </Notice>
       ) : null}
+      {notice ? <Notice tone="success">{notice}</Notice> : null}
 
       {loading ? (
         <div className="panel flex items-center gap-2 p-8 text-sm text-muted-foreground">
@@ -226,9 +251,19 @@ export default function JobDetailPage() {
                     <p className="mt-1 text-xs text-muted-foreground">{standardVersions[0].change_summary}</p>
                   </div>
                   {standardVersions.length > 1 ? (
-                    <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-800">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                      <p>岗位标准已变更，建议对历史候选人重新评分以保持口径一致。</p>
+                    <div className="rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>岗位标准已变更，建议对历史候选人重新评分以保持口径一致。</p>
+                      </div>
+                      <button
+                        onClick={() => void handleRematchAll()}
+                        disabled={rematching}
+                        className="btn-secondary mt-3 h-9 bg-white text-xs"
+                      >
+                        {rematching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        批量重新评分
+                      </button>
                     </div>
                   ) : null}
                 </div>

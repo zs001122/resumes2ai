@@ -28,9 +28,18 @@ def upgrade() -> None:
         "candidate_matches",
         sa.Column("job_standard_version_id", sa.String(length=36), nullable=True),
     )
+    with op.batch_alter_table("candidate_matches") as batch_op:
+        batch_op.create_foreign_key(
+            "fk_candidate_matches_job_standard_version_id",
+            "job_standard_versions",
+            ["job_standard_version_id"],
+            ["id"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_column("candidate_matches", "job_standard_version_id")
+    with op.batch_alter_table("candidate_matches") as batch_op:
+        batch_op.drop_constraint("fk_candidate_matches_job_standard_version_id", type_="foreignkey")
+        batch_op.drop_column("job_standard_version_id")
     op.drop_index("ix_job_standard_versions_job_id_version", table_name="job_standard_versions")
     op.drop_table("job_standard_versions")

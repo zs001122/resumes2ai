@@ -371,6 +371,13 @@ export async function createJob(payload: JobPayload) {
   });
 }
 
+export async function updateJob(jobId: string, payload: Partial<JobPayload>) {
+  return requestJson<Job>(`/api/jobs/${jobId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function parseJD(payload: {
   title?: string;
   jd: string;
@@ -637,6 +644,28 @@ export async function bulkCreateCandidateMatches(jobId: string, candidateIds: st
   return requestJson<CandidateMatch[]>(`/api/jobs/${jobId}/candidates/bulk-match`, {
     method: "POST",
     body: JSON.stringify({ candidate_ids: candidateIds }),
+  });
+}
+
+export type CandidateRematchFailure = {
+  candidate_id: string;
+  reason: string;
+};
+
+export type CandidateRematchResult = {
+  job_id: string;
+  job_standard_version_id: string | null;
+  total: number;
+  succeeded: number;
+  failed: number;
+  matches: CandidateMatch[];
+  failures: CandidateRematchFailure[];
+};
+
+export async function rematchJobCandidates(jobId: string, candidateIds?: string[]) {
+  return requestJson<CandidateRematchResult>(`/api/jobs/${jobId}/candidates/rematch`, {
+    method: "POST",
+    body: JSON.stringify({ candidate_ids: candidateIds && candidateIds.length ? candidateIds : null }),
   });
 }
 

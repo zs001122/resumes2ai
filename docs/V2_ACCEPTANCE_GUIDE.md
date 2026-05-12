@@ -77,3 +77,33 @@ Phase 16 当前通过以下检查：
 - 后端 `ruff check`
 - 前端 `npm run build`
 - V2 TestClient 验收测试 `backend/tests/test_v2_acceptance.py`
+
+## 6. V2.1 与 V2.1.1 后续验收入口
+
+V2.1 第一版能力和 V2.1.1 后续开发计划见：
+
+```text
+docs/V2_1_TASK_BREAKDOWN.md
+docs/V2_1_1_TASK_BREAKDOWN.md
+```
+
+V2.1.1 第一版已补充以下验收项：
+
+- 岗位编辑页：开放和暂停岗位可编辑，关闭岗位不可编辑。
+- 标准版本：修改标准字段生成新版本，修改非标准字段不生成新版本。
+- 批量重新评分：岗位标准变更后可对历史候选人按最新标准重新评分。
+- 评分追溯：新匹配结果关联最新 `job_standard_version_id`。
+- 重试一致性：重新解析和上传任务重试成功后仍执行重复候选人识别。
+- 自动化检查：后端测试、后端 lint、前端构建和前端 lint 均可非交互执行。
+
+当前验证命令：
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe -m pytest tests
+.\venv\Scripts\python.exe -m ruff check app tests
+
+cd ..\frontend
+npm run lint
+npm run build
+```

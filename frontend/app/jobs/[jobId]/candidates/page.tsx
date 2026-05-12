@@ -10,9 +10,9 @@ import {
   CandidateListItem,
   CandidateStatusValue,
   bulkAddCandidatesToTalentPool,
-  bulkCreateCandidateMatches,
   bulkUpdateCandidateStatus,
   listCandidates,
+  rematchJobCandidates,
   updateCandidateStatus,
 } from "@/lib/api";
 
@@ -111,9 +111,9 @@ export default function CandidatesPage() {
     setError(null);
     setBulkResult(null);
     try {
-      const result = await bulkCreateCandidateMatches(params.jobId, selectedIds);
+      const result = await rematchJobCandidates(params.jobId, selectedIds);
       await loadCandidates();
-      setBulkResult(formatBulkResult("批量重新评分", requestedCount, result.length));
+      setBulkResult(formatBulkResult("批量重新评分", requestedCount, result.succeeded));
     } catch (err) {
       setError(err instanceof Error ? err.message : "批量重新评分失败");
     } finally {

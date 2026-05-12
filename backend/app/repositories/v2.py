@@ -100,6 +100,19 @@ class V2Repository:
         self.db.refresh(row)
         return row
 
+    def get_duplicate_check(
+        self,
+        candidate_id: str,
+        resume_file_id: str,
+        matched_candidate_id: str,
+    ) -> CandidateDuplicateCheck | None:
+        statement = select(CandidateDuplicateCheck).where(
+            CandidateDuplicateCheck.candidate_id == candidate_id,
+            CandidateDuplicateCheck.resume_file_id == resume_file_id,
+            CandidateDuplicateCheck.matched_candidate_id == matched_candidate_id,
+        )
+        return self.db.scalars(statement).first()
+
     def list_duplicate_checks_for_candidate(self, candidate_id: str) -> list[CandidateDuplicateCheck]:
         statement = (
             select(CandidateDuplicateCheck)

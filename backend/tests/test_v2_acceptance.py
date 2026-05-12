@@ -197,6 +197,17 @@ def test_v2_acceptance_flow(client: TestClient):
     updated_versions = client.get(f"/api/jobs/{job_id}/standard-versions").json()
     assert len(updated_versions) == 2
     assert updated_versions[0]["version"] == 2
+    assert client.patch(f"/api/jobs/{job_id}", json={"location": "上海"}).status_code == 200
+    non_standard_versions = client.get(f"/api/jobs/{job_id}/standard-versions").json()
+    assert len(non_standard_versions) == 2
+    rematch_response = client.post(f"/api/jobs/{job_id}/candidates/rematch", json={"candidate_ids": candidate_ids})
+    assert rematch_response.status_code == 200
+    rematch_payload = rematch_response.json()
+    assert rematch_payload["succeeded"] == len(candidate_ids)
+    assert rematch_payload["failed"] == 0
+    assert rematch_payload["job_standard_version_id"] == updated_versions[0]["id"]
+    rematched = client.get(f"/api/jobs/{job_id}/candidates/{candidate_id}/match").json()
+    assert rematched["job_standard_version_id"] == updated_versions[0]["id"]
     assert client.post(f"/api/jobs/{job_id}/reopen").json()["status"] == "open"
     assert client.post(f"/api/jobs/{job_id}/close").json()["status"] == "closed"
     assert client.patch(f"/api/jobs/{job_id}", json={"title": "关闭后修改"}).status_code == 400
@@ -291,3 +302,23 @@ def test_unified_upload_detects_duplicate_candidates(client: TestClient):
     assert duplicate_tasks
     assert duplicate_tasks[0]["has_duplicate_risk"] is True
     assert duplicate_tasks[0]["duplicate_count"] == 1
+
+
+def test_rematch_reports_candidates_outside_job(client: TestClient):
+    job_a_id = create_job(client, "重评岗位 A")
+    job_b_id = create_job(client, "重评岗位 B")
+    upload_a = upload_text(client, job_a_id, "后端开发-陈晓明.txt", RESUME_ONE)
+    upload_b = upload_text(client, job_b_id, "前端开发-李思雨.txt", RESUME_TWO)
+    candidate_a_id = upload_a.json()["candidate"]["id"]
+    candidate_b_id = upload_b.json()["candidate"]["id"]
+
+    response = client.post(
+        f"/api/jobs/{job_a_id}/candidates/rematch",
+        json={"candidate_ids": [candidate_a_id, candidate_b_id]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["succeeded"] == 1
+    assert payload["failed"] == 1
+    assert payload["failures"][0]["candidate_id"] == candidate_b_id

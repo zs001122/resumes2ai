@@ -149,6 +149,25 @@ class CandidateBulkActionRequest(BaseModel):
     candidate_ids: list[str]
 
 
+class CandidateRematchRequest(BaseModel):
+    candidate_ids: list[str] | None = None
+
+
+class CandidateRematchFailure(BaseModel):
+    candidate_id: str
+    reason: str
+
+
+class CandidateRematchResult(BaseModel):
+    job_id: str
+    job_standard_version_id: str | None = None
+    total: int
+    succeeded: int
+    failed: int
+    matches: list[CandidateMatchRead] = []
+    failures: list[CandidateRematchFailure] = []
+
+
 class CandidateListItem(BaseModel):
     candidate: CandidateRead
     resume_file: ResumeFileRead
