@@ -78,13 +78,21 @@ Phase 16 当前通过以下检查：
 - 前端 `npm run build`
 - V2 TestClient 验收测试 `backend/tests/test_v2_acceptance.py`
 
-## 6. V2.1 与 V2.1.1 后续验收入口
+## 6. V2 状态总览与后续入口
 
-V2.1 第一版能力和 V2.1.1 后续开发计划见：
+当前 V2 / V2.1 / V2.1.1 / V2.1.2 的完成状态、未完成事项和后续路线图见：
 
 ```text
+docs/V2_STATUS_AND_ROADMAP.md
+```
+
+历史任务拆解仍可按需追溯：
+
+```text
+docs/V2_TASK_BREAKDOWN.md
 docs/V2_1_TASK_BREAKDOWN.md
 docs/V2_1_1_TASK_BREAKDOWN.md
+docs/V2_ISSUE_FIX_PLAN.md
 ```
 
 V2.1.1 第一版已补充以下验收项：

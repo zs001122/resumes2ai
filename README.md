@@ -23,6 +23,12 @@ V2 收尾验收指南见：
 docs/V2_ACCEPTANCE_GUIDE.md
 ```
 
+V2 当前完成状态、未完成事项和后续路线图见：
+
+```text
+docs/V2_STATUS_AND_ROADMAP.md
+```
+
 ## 项目结构
 
 ```text
