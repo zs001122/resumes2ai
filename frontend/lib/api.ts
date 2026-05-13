@@ -286,6 +286,7 @@ export type DashboardSummary = {
   pending_contact_candidates: number;
   parse_failed_resumes: number;
   match_failed_tasks: number;
+  pending_duplicate_reviews: number;
 };
 
 export type DashboardTodo = {
@@ -324,6 +325,9 @@ export type UploadProcessingTask = {
   retry_count: number;
   duplicate_count: number;
   has_duplicate_risk: boolean;
+  pending_duplicate_review_count: number;
+  ignored_duplicate_count: number;
+  confirmed_duplicate_count: number;
   created_at: string;
   updated_at: string;
 };

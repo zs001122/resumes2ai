@@ -8,7 +8,7 @@ from app.models.job import Job
 from app.models.match import CandidateMatch
 from app.models.resume import ResumeFile
 from app.models.status import CandidateJobStatus
-from app.models.v2 import CandidateTimelineEvent, UploadProcessingTask
+from app.models.v2 import CandidateDuplicateCheck, CandidateTimelineEvent, UploadProcessingTask
 from app.schemas.dashboard import DashboardActivity, DashboardPayload, DashboardSummary, DashboardTodo
 
 
@@ -16,7 +16,7 @@ def build_dashboard_payload(db: Session) -> DashboardPayload:
     summary = get_dashboard_summary(db)
     return DashboardPayload(
         summary=summary,
-        todos=build_dashboard_todos(summary),
+        todos=build_dashboard_todos(summary, get_pending_duplicate_review_href(db)),
         recent_activities=get_recent_activities(db),
     )
 
@@ -52,11 +52,24 @@ def get_dashboard_summary(db: Session) -> DashboardSummary:
             db,
             select(func.count()).select_from(UploadProcessingTask).where(UploadProcessingTask.match_status == "failed"),
         ),
+        pending_duplicate_reviews=count_scalar(
+            db,
+            select(func.count())
+            .select_from(CandidateDuplicateCheck)
+            .where(CandidateDuplicateCheck.status == "pending_review"),
+        ),
     )
 
 
-def build_dashboard_todos(summary: DashboardSummary) -> list[DashboardTodo]:
+def build_dashboard_todos(summary: DashboardSummary, duplicate_review_href: str = "/jobs") -> list[DashboardTodo]:
     return [
+        DashboardTodo(
+            key="pending_duplicate_review",
+            title="复核重复候选人风险",
+            count=summary.pending_duplicate_reviews,
+            href=duplicate_review_href,
+            tone="danger" if summary.pending_duplicate_reviews else "default",
+        ),
         DashboardTodo(
             key="parse_failed",
             title="处理解析失败",
@@ -91,6 +104,17 @@ def build_dashboard_todos(summary: DashboardSummary) -> list[DashboardTodo]:
             href="/jobs",
         ),
     ]
+
+
+def get_pending_duplicate_review_href(db: Session) -> str:
+    row = db.scalars(
+        select(CandidateDuplicateCheck)
+        .where(CandidateDuplicateCheck.status == "pending_review")
+        .order_by(CandidateDuplicateCheck.created_at.desc())
+    ).first()
+    if not row:
+        return "/jobs"
+    return f"/jobs/{row.job_id}/candidates/{row.candidate_id}"
 
 
 def get_recent_activities(db: Session, limit: int = 10) -> list[DashboardActivity]:

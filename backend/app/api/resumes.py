@@ -168,7 +168,8 @@ async def _upload_resume_for_job(db: Session, job_id: str, file: UploadFile) -> 
 def list_upload_tasks(job_id: str, db: Session = Depends(get_db)) -> list[UploadProcessingTaskRead]:
     if not JobRepository(db).get(job_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
-    return [UploadProcessingTaskRead.model_validate(row) for row in V2Repository(db).list_upload_tasks(job_id)]
+    v2_repository = V2Repository(db)
+    return [_upload_task_read(v2_repository, row) for row in v2_repository.list_upload_tasks(job_id)]
 
 
 @router.post("/jobs/{job_id}/upload-tasks/{task_id}/retry", response_model=UploadProcessingTaskRead)
@@ -184,7 +185,7 @@ async def retry_upload_task(
     if not task or task.job_id != job_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="上传任务不存在")
     task = await _retry_upload_task(db, task_id)
-    return UploadProcessingTaskRead.model_validate(task)
+    return _upload_task_read(v2_repository, task)
 
 
 @router.post("/jobs/{job_id}/upload-tasks/retry-failed", response_model=list[UploadProcessingTaskRead])
@@ -198,7 +199,7 @@ async def retry_failed_upload_tasks(
     rows = []
     for task in v2_repository.list_failed_upload_tasks(job_id):
         rows.append(await _retry_upload_task(db, task.id))
-    return [UploadProcessingTaskRead.model_validate(row) for row in rows]
+    return [_upload_task_read(v2_repository, row) for row in rows]
 
 
 @router.get("/resume-files/{resume_file_id}", response_model=ResumeFileRead)
@@ -926,6 +927,20 @@ def _duplicate_reads(repository: ResumeRepository, rows) -> list[DuplicateCandid
         matched = repository.get_candidate(row.matched_candidate_id)
         result.append(payload.model_copy(update={"matched_candidate": CandidateRead.model_validate(matched) if matched else None}))
     return result
+
+
+def _upload_task_read(v2_repository: V2Repository, task) -> UploadProcessingTaskRead:
+    payload = UploadProcessingTaskRead.model_validate(task)
+    if not task.resume_file_id:
+        return payload
+    duplicate_rows = v2_repository.list_duplicate_checks_for_resume_file(task.resume_file_id)
+    return payload.model_copy(
+        update={
+            "pending_duplicate_review_count": sum(row.status == "pending_review" for row in duplicate_rows),
+            "ignored_duplicate_count": sum(row.status == "ignored" for row in duplicate_rows),
+            "confirmed_duplicate_count": sum(row.status == "confirmed_duplicate" for row in duplicate_rows),
+        }
+    )
 
 
 def _normalize_phone(value: str | None) -> str:

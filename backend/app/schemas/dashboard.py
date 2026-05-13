@@ -13,6 +13,7 @@ class DashboardSummary(BaseModel):
     pending_contact_candidates: int
     parse_failed_resumes: int
     match_failed_tasks: int
+    pending_duplicate_reviews: int
 
 
 class DashboardActivity(BaseModel):

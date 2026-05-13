@@ -146,6 +146,7 @@ export default function DashboardPage() {
               <div className="space-y-3 p-5">
                 <AlertRow label="解析失败" value={dashboard.summary.parse_failed_resumes} />
                 <AlertRow label="评分失败" value={dashboard.summary.match_failed_tasks} />
+                <AlertRow label="重复待复核" value={dashboard.summary.pending_duplicate_reviews} />
                 <AlertRow label="待初筛" value={dashboard.summary.pending_candidates} neutral />
                 <AlertRow label="今日新增" value={dashboard.summary.today_new_candidates} neutral />
               </div>

@@ -148,7 +148,7 @@ export default function UploadTasksPage() {
                   <StatusText value={task.upload_status} />
                   <StatusText value={task.parse_status} />
                   <StatusText value={task.match_status} />
-                  <DuplicateStatus count={task.duplicate_count} />
+                  <DuplicateStatus count={task.duplicate_count} task={task} />
                   <span className="min-w-0 truncate text-xs text-red-600">{task.error_message || "-"}</span>
                   <span>
                     {task.parse_status === "failed" || task.match_status === "failed" ? (
@@ -189,12 +189,24 @@ function StatusText({ value }: { value: string }) {
   return <span className={value === "failed" ? "text-red-600" : "text-muted-foreground"}>{labels[value] ?? value}</span>;
 }
 
-function DuplicateStatus({ count }: { count: number }) {
+function DuplicateStatus({ count, task }: { count: number; task?: UploadProcessingTask }) {
   if (!count) return <span className="text-xs text-muted-foreground">无风险</span>;
+  const pending = task?.pending_duplicate_review_count ?? 0;
+  const confirmed = task?.confirmed_duplicate_count ?? 0;
+  const ignored = task?.ignored_duplicate_count ?? 0;
   return (
-    <span className="flex items-center gap-1 text-xs text-amber-700">
-      <AlertTriangle className="h-3.5 w-3.5" />
-      {count} 个
+    <span className="space-y-1 text-xs">
+      <span className="flex items-center gap-1 text-amber-700">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        {pending ? `${pending} 待复核` : `${count} 个`}
+      </span>
+      {confirmed || ignored ? (
+        <span className="block text-muted-foreground">
+          {confirmed ? `确认 ${confirmed}` : ""}
+          {confirmed && ignored ? " / " : ""}
+          {ignored ? `忽略 ${ignored}` : ""}
+        </span>
+      ) : null}
     </span>
   );
 }

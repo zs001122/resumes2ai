@@ -125,6 +125,14 @@ class V2Repository:
         )
         return list(self.db.scalars(statement).all())
 
+    def list_duplicate_checks_for_resume_file(self, resume_file_id: str) -> list[CandidateDuplicateCheck]:
+        statement = (
+            select(CandidateDuplicateCheck)
+            .where(CandidateDuplicateCheck.resume_file_id == resume_file_id)
+            .order_by(CandidateDuplicateCheck.created_at.desc())
+        )
+        return list(self.db.scalars(statement).all())
+
     def update_duplicate_check_review(
         self,
         row: CandidateDuplicateCheck,

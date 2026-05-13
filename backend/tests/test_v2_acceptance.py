@@ -299,6 +299,19 @@ def test_unified_upload_detects_duplicate_candidates(client: TestClient):
     duplicate_check_id = payload["duplicate_candidates"][0]["id"]
     duplicate_candidate_id = payload["candidate"]["id"]
 
+    dashboard = client.get("/api/dashboard").json()
+    assert dashboard["summary"]["pending_duplicate_reviews"] == 1
+    duplicate_todo = next(item for item in dashboard["todos"] if item["key"] == "pending_duplicate_review")
+    assert duplicate_todo["count"] == 1
+    assert duplicate_candidate_id in duplicate_todo["href"]
+
+    tasks = client.get(f"/api/jobs/{job_id}/upload-tasks").json()
+    duplicate_tasks = [task for task in tasks if task["original_filename"] == "陈晓明-重复.txt"]
+    assert duplicate_tasks
+    assert duplicate_tasks[0]["has_duplicate_risk"] is True
+    assert duplicate_tasks[0]["duplicate_count"] == 1
+    assert duplicate_tasks[0]["pending_duplicate_review_count"] == 1
+
     review_response = client.patch(
         f"/api/jobs/{job_id}/candidates/{duplicate_candidate_id}/duplicate-checks/{duplicate_check_id}",
         json={"status": "confirmed_duplicate", "review_note": "确认是同一位候选人，本期不自动合并"},
@@ -313,9 +326,8 @@ def test_unified_upload_detects_duplicate_candidates(client: TestClient):
 
     tasks = client.get(f"/api/jobs/{job_id}/upload-tasks").json()
     duplicate_tasks = [task for task in tasks if task["original_filename"] == "陈晓明-重复.txt"]
-    assert duplicate_tasks
-    assert duplicate_tasks[0]["has_duplicate_risk"] is True
-    assert duplicate_tasks[0]["duplicate_count"] == 1
+    assert duplicate_tasks[0]["pending_duplicate_review_count"] == 0
+    assert duplicate_tasks[0]["confirmed_duplicate_count"] == 1
 
 
 def test_rematch_reports_candidates_outside_job(client: TestClient):
