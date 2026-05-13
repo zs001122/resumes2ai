@@ -1,6 +1,6 @@
 # AI 简历筛选工作台 V2 设计方案
 
-> 当前状态说明：V2 / V2.1 / V2.1.1 / V2.1.2 的完成状态、未完成事项和后续路线图见 [V2_STATUS_AND_ROADMAP.md](./V2_STATUS_AND_ROADMAP.md)。本文档保留为产品设计和模块边界说明。
+> 当前状态说明：V2 / V2.1 / V2.1.1 / V2.1.2 的完成状态、冻结边界和后续候选池见 [V2_STATUS_AND_ROADMAP.md](./V2_STATUS_AND_ROADMAP.md)。V2.1.2 是 V2 功能截止版本，本文档保留为产品设计和模块边界说明。
 
 ## 1. 文档定位
 
