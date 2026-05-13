@@ -44,6 +44,10 @@ python scripts/api_tests/06_v2_acceptance.py
 # 7. 删除指定岗位及该岗位下不再关联其他岗位的候选人。默认只预览，追加 --yes 执行删除
 python scripts/api_tests/07_delete_job.py --job-id <JOB_ID>
 python scripts/api_tests/07_delete_job.py --job-id <JOB_ID> --yes
+
+# 8. 全量清空所有岗位、候选人、上传记录和 uploads 文件。默认只预览，追加 --yes 执行删除
+python scripts/api_tests/08_clear_all.py
+python scripts/api_tests/08_clear_all.py --yes
 ```
 
 默认简历样例使用：
