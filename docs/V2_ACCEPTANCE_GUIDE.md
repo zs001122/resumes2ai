@@ -88,6 +88,12 @@ docs/V2_STATUS_AND_ROADMAP.md
 
 V2.1.2 是 V2 功能截止版本。V2 后续只做稳定化、验收和交付，不再新增 V2.1.x 功能；新业务能力进入下一大版本候选池。
 
+V2 稳定化交付检查表见：
+
+```text
+docs/V2_RELEASE_CHECKLIST.md
+```
+
 历史任务拆解仍可按需追溯：
 
 ```text

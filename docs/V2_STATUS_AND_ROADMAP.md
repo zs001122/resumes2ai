@@ -16,6 +16,7 @@
 - [V2_1_1_TASK_BREAKDOWN.md](./V2_1_1_TASK_BREAKDOWN.md)：V2.1.1 / V2.1.2 历史任务拆解。
 - [V2_ISSUE_FIX_PLAN.md](./V2_ISSUE_FIX_PLAN.md)：岗位候选人边界修复历史方案。
 - [V2_ACCEPTANCE_GUIDE.md](./V2_ACCEPTANCE_GUIDE.md)：当前验收命令和回归路径。
+- [V2_RELEASE_CHECKLIST.md](./V2_RELEASE_CHECKLIST.md)：V2 稳定化、演示、清理和交付检查表。
 
 ## 2. 当前结论
 
@@ -66,6 +67,8 @@ V2 稳定化阶段只围绕交付闭环展开：
 - 标记已知限制：把未进入 V2 的功能统一放入下一大版本候选池。
 - 修复阻断缺陷：只处理影响验收和交付的 bug。
 - 冻结范围：任何新能力都必须先进入下一大版本规划，不直接进入 V2。
+
+具体交付步骤见 [V2_RELEASE_CHECKLIST.md](./V2_RELEASE_CHECKLIST.md)。
 
 ## 3. 已完成范围
 
@@ -314,6 +317,7 @@ npm run build
 - `HR_RESUME_SCREENING_TOOL_V2_DESIGN.md`：保留，作为产品设计和模块边界文档。
 - `V2_STATUS_AND_ROADMAP.md`：新增，作为 V2 当前状态和后续路线图的权威总览。
 - `V2_ACCEPTANCE_GUIDE.md`：保留，作为验收命令和手动回归入口。
+- `V2_RELEASE_CHECKLIST.md`：新增，作为 V2 稳定化和交付检查表。
 - `V2_TASK_BREAKDOWN.md`：保留为历史归档，不再作为当前计划入口。
 - `V2_1_TASK_BREAKDOWN.md`：保留为历史归档，不再作为当前计划入口。
 - `V2_1_1_TASK_BREAKDOWN.md`：保留为历史归档，不再作为当前计划入口。

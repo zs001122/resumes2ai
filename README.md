@@ -29,6 +29,12 @@ V2 当前完成状态、未完成事项和后续路线图见：
 docs/V2_STATUS_AND_ROADMAP.md
 ```
 
+V2 稳定化与交付检查表见：
+
+```text
+docs/V2_RELEASE_CHECKLIST.md
+```
+
 ## 项目结构
 
 ```text
