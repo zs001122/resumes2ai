@@ -75,7 +75,9 @@ class CandidateDuplicateCheck(Base):
     match_reason: Mapped[str] = mapped_column(String(120), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending_review")
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class JobStandardVersion(Base):

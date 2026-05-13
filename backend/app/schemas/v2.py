@@ -20,6 +20,7 @@ class TimelineActionType(StrEnum):
     TALENT_POOL_ADDED = "talent_pool_added"
     TALENT_POOL_REMOVED = "talent_pool_removed"
     BULK_ACTION = "bulk_action"
+    DUPLICATE_REVIEWED = "duplicate_reviewed"
 
 
 class UploadProcessingTaskRead(BaseModel):

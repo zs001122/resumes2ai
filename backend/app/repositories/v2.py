@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.job import utc_now
 from app.models.v2 import (
     CandidateDuplicateCheck,
     CandidateMatchExplanation,
@@ -113,6 +114,9 @@ class V2Repository:
         )
         return self.db.scalars(statement).first()
 
+    def get_duplicate_check_by_id(self, check_id: str) -> CandidateDuplicateCheck | None:
+        return self.db.get(CandidateDuplicateCheck, check_id)
+
     def list_duplicate_checks_for_candidate(self, candidate_id: str) -> list[CandidateDuplicateCheck]:
         statement = (
             select(CandidateDuplicateCheck)
@@ -120,6 +124,20 @@ class V2Repository:
             .order_by(CandidateDuplicateCheck.created_at.desc())
         )
         return list(self.db.scalars(statement).all())
+
+    def update_duplicate_check_review(
+        self,
+        row: CandidateDuplicateCheck,
+        status: str,
+        review_note: str | None = None,
+    ) -> CandidateDuplicateCheck:
+        row.status = status
+        row.review_note = review_note
+        row.reviewed_at = utc_now()
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
 
     def create_job_standard_version(
         self,

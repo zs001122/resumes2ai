@@ -296,6 +296,20 @@ def test_unified_upload_detects_duplicate_candidates(client: TestClient):
     assert payload["duplicate_policy"] == "created_new"
     assert payload["duplicate_candidates"]
     assert payload["duplicate_candidates"][0]["match_reason"] == "手机号完全匹配"
+    duplicate_check_id = payload["duplicate_candidates"][0]["id"]
+    duplicate_candidate_id = payload["candidate"]["id"]
+
+    review_response = client.patch(
+        f"/api/jobs/{job_id}/candidates/{duplicate_candidate_id}/duplicate-checks/{duplicate_check_id}",
+        json={"status": "confirmed_duplicate", "review_note": "确认是同一位候选人，本期不自动合并"},
+    )
+    assert review_response.status_code == 200
+    assert review_response.json()["status"] == "confirmed_duplicate"
+    detail_response = client.get(f"/api/jobs/{job_id}/candidates/{duplicate_candidate_id}")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["duplicate_candidates"][0]["review_note"] == "确认是同一位候选人，本期不自动合并"
+    timeline = client.get(f"/api/jobs/{job_id}/candidates/{duplicate_candidate_id}/timeline").json()
+    assert any(item["action_type"] == "duplicate_reviewed" for item in timeline)
 
     tasks = client.get(f"/api/jobs/{job_id}/upload-tasks").json()
     duplicate_tasks = [task for task in tasks if task["original_filename"] == "陈晓明-重复.txt"]

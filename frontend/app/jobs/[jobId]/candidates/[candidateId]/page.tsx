@@ -29,6 +29,7 @@ import {
   listCandidateTimeline,
   removeCandidateFromTalentPool,
   removeCandidateTag,
+  reviewCandidateDuplicateCheck,
 } from "@/lib/api";
 
 function formatDateTime(value: string) {
@@ -60,6 +61,7 @@ export default function CandidateDetailPage() {
   const [savingTag, setSavingTag] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [copyingReport, setCopyingReport] = useState(false);
+  const [reviewingDuplicateId, setReviewingDuplicateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadDetail() {
@@ -167,6 +169,29 @@ export default function CandidateDetailPage() {
       setError(err instanceof Error ? err.message : "重新评分失败");
     } finally {
       setMatching(false);
+    }
+  }
+
+  async function handleReviewDuplicate(checkId: string, status: "ignored" | "confirmed_duplicate") {
+    setReviewingDuplicateId(checkId);
+    setError(null);
+    try {
+      const updated = await reviewCandidateDuplicateCheck(params.jobId, params.candidateId, checkId, status);
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              duplicate_candidates: current.duplicate_candidates.map((item) =>
+                item.id === checkId ? updated : item,
+              ),
+            }
+          : current,
+      );
+      setTimeline(await listCandidateTimeline(params.jobId, params.candidateId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重复复核保存失败");
+    } finally {
+      setReviewingDuplicateId(null);
     }
   }
 
@@ -296,13 +321,39 @@ export default function CandidateDetailPage() {
                   </div>
                   {detail.duplicate_candidates.map((item) => (
                     <div key={item.id} className="rounded-md border border-border px-3 py-3">
-                      <p className="text-sm font-semibold">{item.matched_candidate?.name || "姓名待确认"}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-semibold">{item.matched_candidate?.name || "姓名待确认"}</p>
+                        <DuplicateReviewStatus status={item.status} />
+                      </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {item.match_reason} / 置信度 {Math.round(item.confidence * 100)}%
                       </p>
                       <p className="mt-2 text-xs text-muted-foreground">
                         {item.matched_candidate?.phone || item.matched_candidate?.email || "联系方式待确认"}
                       </p>
+                      {item.review_note ? (
+                        <p className="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{item.review_note}</p>
+                      ) : null}
+                      {item.status === "pending_review" ? (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <button
+                            onClick={() => void handleReviewDuplicate(item.id, "ignored")}
+                            disabled={reviewingDuplicateId === item.id}
+                            className="btn-secondary h-9 text-xs"
+                          >
+                            {reviewingDuplicateId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                            忽略风险
+                          </button>
+                          <button
+                            onClick={() => void handleReviewDuplicate(item.id, "confirmed_duplicate")}
+                            disabled={reviewingDuplicateId === item.id}
+                            className="btn-primary h-9 text-xs"
+                          >
+                            {reviewingDuplicateId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                            确认重复
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -492,6 +543,21 @@ export default function CandidateDetailPage() {
       )}
     </WorkspaceShell>
   );
+}
+
+function DuplicateReviewStatus({ status }: { status: string }) {
+  const labels: Record<string, string> = {
+    pending_review: "待复核",
+    ignored: "已忽略",
+    confirmed_duplicate: "确认重复",
+  };
+  const tone =
+    status === "confirmed_duplicate"
+      ? "bg-red-50 text-red-700"
+      : status === "ignored"
+        ? "bg-emerald-50 text-emerald-700"
+        : "bg-amber-50 text-amber-700";
+  return <span className={`shrink-0 rounded px-2 py-1 text-xs font-semibold ${tone}`}>{labels[status] ?? status}</span>;
 }
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {

@@ -85,8 +85,15 @@ class DuplicateCandidateRead(BaseModel):
     match_reason: str
     confidence: float
     status: str
+    review_note: str | None = None
     created_at: datetime
+    reviewed_at: datetime | None = None
     matched_candidate: CandidateRead | None = None
+
+
+class DuplicateCandidateReviewUpdate(BaseModel):
+    status: str
+    review_note: str | None = None
 
 
 class ResumeUploadResult(BaseModel):

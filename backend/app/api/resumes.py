@@ -18,6 +18,7 @@ from app.schemas.resume import (
     CandidateListItem,
     CandidateRead,
     DuplicateCandidateRead,
+    DuplicateCandidateReviewUpdate,
     CandidateReviewData,
     CandidateBulkActionRequest,
     CandidateRematchFailure,
@@ -54,6 +55,7 @@ router = APIRouter(tags=["resumes"])
 SUPPORTED_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt"}
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_CANDIDATE_STATUSES = {"pending", "favorite", "pending_contact", "rejected", "archived"}
+ALLOWED_DUPLICATE_REVIEW_STATUSES = {"pending_review", "ignored", "confirmed_duplicate"}
 
 
 @router.post(
@@ -557,6 +559,43 @@ def get_candidate_detail(
             V2Repository(db).list_duplicate_checks_for_candidate(candidate_id),
         ),
     )
+
+
+@router.patch(
+    "/jobs/{job_id}/candidates/{candidate_id}/duplicate-checks/{check_id}",
+    response_model=DuplicateCandidateRead,
+)
+def review_candidate_duplicate_check(
+    job_id: str,
+    candidate_id: str,
+    check_id: str,
+    payload: DuplicateCandidateReviewUpdate,
+    db: Session = Depends(get_db),
+) -> DuplicateCandidateRead:
+    if payload.status not in ALLOWED_DUPLICATE_REVIEW_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不支持的重复复核状态")
+    repository = ResumeRepository(db)
+    if not JobRepository(db).get(job_id) or not repository.get_candidate_for_job(job_id, candidate_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位或候选人不存在")
+    v2_repository = V2Repository(db)
+    row = v2_repository.get_duplicate_check_by_id(check_id)
+    if not row or row.job_id != job_id or row.candidate_id != candidate_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="重复检查记录不存在")
+
+    old_status = row.status
+    row = v2_repository.update_duplicate_check_review(row, payload.status, payload.review_note)
+    v2_repository.create_timeline_event(
+        CandidateTimelineEventCreate(
+            candidate_id=candidate_id,
+            job_id=job_id,
+            action_type=TimelineActionType.DUPLICATE_REVIEWED,
+            action_summary="复核重复候选人风险",
+            before_value=old_status,
+            after_value=payload.status,
+            metadata_json={"duplicate_check_id": check_id, "review_note": payload.review_note},
+        )
+    )
+    return _duplicate_reads(repository, [row])[0]
 
 
 @router.patch("/jobs/{job_id}/candidates/{candidate_id}/status", response_model=CandidateStatusRead)

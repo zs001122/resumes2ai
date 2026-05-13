@@ -88,8 +88,10 @@ export type DuplicateCandidate = {
   matched_candidate_id: string;
   match_reason: string;
   confidence: number;
-  status: string;
+  status: "pending_review" | "ignored" | "confirmed_duplicate" | string;
+  review_note: string | null;
   created_at: string;
+  reviewed_at: string | null;
   matched_candidate: Candidate | null;
 };
 
@@ -671,6 +673,22 @@ export async function rematchJobCandidates(jobId: string, candidateIds?: string[
 
 export async function getCandidateDetail(jobId: string, candidateId: string) {
   return requestJson<CandidateDetail>(`/api/jobs/${jobId}/candidates/${candidateId}`);
+}
+
+export async function reviewCandidateDuplicateCheck(
+  jobId: string,
+  candidateId: string,
+  checkId: string,
+  status: "pending_review" | "ignored" | "confirmed_duplicate",
+  reviewNote?: string,
+) {
+  return requestJson<DuplicateCandidate>(
+    `/api/jobs/${jobId}/candidates/${candidateId}/duplicate-checks/${checkId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status, review_note: reviewNote?.trim() || null }),
+    },
+  );
 }
 
 export async function updateCandidateStatus(
