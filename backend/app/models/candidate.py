@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, JSON, String
+from sqlalchemy import DateTime, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -24,6 +24,10 @@ class Candidate(Base):
     education: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     work_experiences: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     project_experiences: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    certifications: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    languages: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    awards: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    self_evaluation: Mapped[str | None] = mapped_column(Text, nullable=True)
     low_confidence_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)

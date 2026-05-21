@@ -47,7 +47,7 @@ from app.schemas.v2 import (
 from app.services.matching import generate_candidate_match
 from app.services.match_explanations import build_match_explanations
 from app.services.parsers.resume_text import ResumeTextExtractor, UnsupportedResumeFileType
-from app.services.resume_parser import parse_resume_text
+from app.services.resume_parser import parse_resume_text_with_ai
 from app.services.storage.local import LocalStorageService
 
 router = APIRouter(tags=["resumes"])
@@ -126,7 +126,7 @@ async def _upload_resume_for_job(db: Session, job_id: str, file: UploadFile) -> 
         )
     )
 
-    result = _parse_and_save_resume(repository, resume_file, original_path)
+    result = await _parse_and_save_resume(repository, resume_file, original_path)
     task = _sync_task_after_parse(v2_repository, task, result)
     if result.candidate:
         task = _sync_duplicate_checks(repository, v2_repository, result, task)
@@ -231,14 +231,14 @@ def preview_resume_file(resume_file_id: str, db: Session = Depends(get_db)) -> R
 
 
 @router.post("/resume-files/{resume_file_id}/parse", response_model=ResumeUploadResult)
-def parse_resume_file(resume_file_id: str, db: Session = Depends(get_db)) -> ResumeUploadResult:
+async def parse_resume_file(resume_file_id: str, db: Session = Depends(get_db)) -> ResumeUploadResult:
     repository = ResumeRepository(db)
     resume_file = repository.get_resume_file(resume_file_id)
     if not resume_file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历文件不存在")
 
     path = LocalStorageService().resolve(resume_file.file_path)
-    result = _parse_and_save_resume(repository, resume_file, path)
+    result = await _parse_and_save_resume(repository, resume_file, path)
     v2_repository = V2Repository(db)
     task = v2_repository.get_upload_task_for_resume_file(resume_file_id)
     if task:
@@ -709,7 +709,7 @@ def list_correction_logs(
     return [FieldCorrectionLogRead.model_validate(row) for row in repository.list_correction_logs(candidate_id)]
 
 
-def _parse_and_save_resume(
+async def _parse_and_save_resume(
     repository: ResumeRepository,
     resume_file: ResumeFile,
     original_path: Path,
@@ -718,7 +718,7 @@ def _parse_and_save_resume(
 
     try:
         parsed_text = extractor.extract_text(original_path)
-        parsed_resume = parse_resume_text(resume_file.file_name, parsed_text)
+        parsed_resume = await parse_resume_text_with_ai(resume_file.file_name, parsed_text)
         preview_path = original_path.with_name("preview.txt")
         preview_path.write_text(parsed_text, encoding="utf-8")
 
@@ -783,13 +783,13 @@ async def _retry_upload_task(db: Session, task_id: str):
         )
 
     if task.parse_status == "failed":
-        result = _parse_and_save_resume(repository, resume_file, LocalStorageService().resolve(resume_file.file_path))
+        result = await _parse_and_save_resume(repository, resume_file, LocalStorageService().resolve(resume_file.file_path))
         task = _sync_task_after_parse(v2_repository, task, result)
         if result.candidate:
             task = _sync_duplicate_checks(repository, v2_repository, result, task)
 
     resume_file = repository.get_resume_file(resume_file.id)
-    if resume_file and resume_file.candidate_id and task.match_status == "failed":
+    if resume_file and resume_file.candidate_id and task.match_status in {"pending", "failed"}:
         job = JobRepository(db).get(task.job_id)
         candidate = repository.get_candidate(resume_file.candidate_id)
         if job and candidate:

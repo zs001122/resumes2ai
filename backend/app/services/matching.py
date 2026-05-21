@@ -134,5 +134,9 @@ def _candidate_payload(candidate: Candidate) -> dict[str, Any]:
         "education": candidate.education,
         "work_experiences": candidate.work_experiences,
         "project_experiences": candidate.project_experiences,
+        "certifications": candidate.certifications,
+        "languages": candidate.languages,
+        "awards": candidate.awards,
+        "self_evaluation": candidate.self_evaluation,
         "low_confidence_fields": candidate.low_confidence_fields,
     }

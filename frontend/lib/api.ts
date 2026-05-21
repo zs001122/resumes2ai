@@ -44,6 +44,10 @@ export type Candidate = {
   education: Record<string, unknown>[];
   work_experiences: Record<string, unknown>[];
   project_experiences: Record<string, unknown>[];
+  certifications: string[];
+  languages: string[];
+  awards: string[];
+  self_evaluation: string | null;
   low_confidence_fields: string[];
   created_at: string;
   updated_at: string;

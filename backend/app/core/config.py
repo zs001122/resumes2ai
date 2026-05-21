@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     ai_api_key: str = "YOUR_DEEPSEEK_API_KEY"
     ai_model: str = "deepseek-v4-flash"
     ai_timeout_seconds: int = 60
+    ai_resume_parse_enabled: bool = False
 
     cors_origins: list[str] = [
         "http://localhost:3000",

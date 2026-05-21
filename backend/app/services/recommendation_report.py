@@ -36,6 +36,10 @@ def build_recommendation_markdown(
         "",
         *_bullet_lines(_highlight_items(candidate, match, explanations), "暂无明确亮点，建议补充人工判断。"),
         "",
+        "## 项目与证书",
+        "",
+        *_bullet_lines(_project_and_certificate_items(candidate), "暂无项目或证书信息。"),
+        "",
         "## 主要短板",
         "",
         *_bullet_lines(match.weak_points, "暂无明确短板。"),
@@ -90,3 +94,15 @@ def _highlight_items(
         if explanation.dimension in {"核心技能匹配", "项目经验匹配"} and explanation.conclusion:
             items.append(explanation.conclusion)
     return items or match.matched_points[:2]
+
+
+def _project_and_certificate_items(candidate: Candidate) -> list[str]:
+    items: list[str] = []
+    for project in candidate.project_experiences[:3]:
+        if isinstance(project, dict):
+            name = project.get("name") or "项目经历"
+            description = project.get("description") or project.get("raw") or ""
+            items.append(f"{name}：{description}".rstrip("："))
+    for certificate in candidate.certifications[:5]:
+        items.append(f"证书：{certificate}")
+    return items

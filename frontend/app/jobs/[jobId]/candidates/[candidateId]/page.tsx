@@ -310,6 +310,8 @@ export default function CandidateDetailPage() {
               <Info label="工作年限" value={detail.candidate.years_of_experience?.toString()} />
               <Info label="最高学历" value={detail.candidate.highest_education} />
               <TagList title="技能" items={detail.candidate.skills} />
+              <TagList title="证书" items={detail.candidate.certifications} />
+              <TagList title="语言" items={detail.candidate.languages} />
             </Panel>
 
             <Panel title="重复识别">
@@ -495,6 +497,21 @@ export default function CandidateDetailPage() {
               </div>
             </Panel>
 
+            <Panel title="结构化经历">
+              <StructuredItems title="教育经历" items={detail.candidate.education} />
+              <StructuredItems title="工作经历" items={detail.candidate.work_experiences} />
+              <StructuredItems title="项目经历" items={detail.candidate.project_experiences} />
+              <InlineList title="奖项荣誉" items={detail.candidate.awards} />
+              {detail.candidate.self_evaluation ? (
+                <div className="mt-4">
+                  <p className="text-sm font-semibold">自我评价</p>
+                  <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted px-3 py-3 text-sm leading-6 text-muted-foreground">
+                    {detail.candidate.self_evaluation}
+                  </p>
+                </div>
+              ) : null}
+            </Panel>
+
             <Panel title="操作时间线">
               {timeline.length ? (
                 <div className="space-y-3">
@@ -609,6 +626,52 @@ function TagList({ title, items }: { title: string; items: string[] }) {
       )}
     </div>
   );
+}
+
+function InlineList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="mt-4">
+      <p className="text-sm font-semibold">{title}</p>
+      {items.length ? (
+        <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+          {items.map((item) => (
+            <li key={item} className="rounded-md bg-muted px-3 py-2">{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">暂无</p>
+      )}
+    </div>
+  );
+}
+
+function StructuredItems({ title, items }: { title: string; items: Record<string, unknown>[] }) {
+  return (
+    <div className="mt-4">
+      <p className="text-sm font-semibold">{title}</p>
+      {items.length ? (
+        <div className="mt-2 space-y-2">
+          {items.map((item, index) => (
+            <div key={`${title}-${index}`} className="rounded-md bg-muted px-3 py-3 text-sm leading-6 text-muted-foreground">
+              {formatStructuredItem(item)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">暂无</p>
+      )}
+    </div>
+  );
+}
+
+function formatStructuredItem(item: Record<string, unknown>) {
+  const preferred = ["time_range", "school", "degree", "major", "company", "title", "name", "role", "description", "raw"];
+  const values = preferred
+    .map((key) => item[key])
+    .filter((value) => typeof value === "string" && value.trim())
+    .map(String);
+  if (values.length) return values.join(" / ");
+  return JSON.stringify(item);
 }
 
 function renderHighlightedPreview(content: string, keywords: string[]): ReactNode[] {

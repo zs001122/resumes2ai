@@ -76,7 +76,11 @@ def main() -> None:
 
         retry_response = http.post(f"/api/jobs/{job_id}/upload-tasks/retry-failed")
         assert_status(retry_response, 200)
-        print_json("7 retry failed tasks", retry_response.json())
+        retry_payload = retry_response.json()
+        print_json("7 retry failed tasks", retry_payload)
+        for task in retry_payload:
+            if task["parse_status"] == "success" and task["match_status"] != "success":
+                raise RuntimeError("retry parsed a resume successfully but did not generate a match")
 
         candidates_response = http.get(f"/api/jobs/{job_id}/candidates?skill=React&min_score=1")
         assert_status(candidates_response, 200)

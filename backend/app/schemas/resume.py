@@ -21,6 +21,10 @@ class CandidateRead(BaseModel):
     education: list[dict]
     work_experiences: list[dict]
     project_experiences: list[dict]
+    certifications: list[str]
+    languages: list[str]
+    awards: list[str]
+    self_evaluation: str | None
     low_confidence_fields: list[str]
     created_at: datetime
     updated_at: datetime
@@ -36,6 +40,13 @@ class CandidateUpdate(BaseModel):
     years_of_experience: float | None = None
     highest_education: str | None = None
     skills: list[str] | None = None
+    education: list[dict] | None = None
+    work_experiences: list[dict] | None = None
+    project_experiences: list[dict] | None = None
+    certifications: list[str] | None = None
+    languages: list[str] | None = None
+    awards: list[str] | None = None
+    self_evaluation: str | None = None
     low_confidence_fields: list[str] | None = None
 
 

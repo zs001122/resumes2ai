@@ -24,6 +24,10 @@ type EditableForm = {
   years_of_experience: string;
   highest_education: string;
   skills: string;
+  certifications: string;
+  languages: string;
+  awards: string;
+  self_evaluation: string;
 };
 
 type HighlightRange = {
@@ -42,6 +46,10 @@ const fieldLabels: Record<keyof EditableForm, string> = {
   years_of_experience: "工作年限",
   highest_education: "最高学历",
   skills: "技能关键词",
+  certifications: "证书",
+  languages: "语言能力",
+  awards: "奖项荣誉",
+  self_evaluation: "自我评价",
 };
 
 function toForm(data: CandidateReviewData): EditableForm {
@@ -57,6 +65,10 @@ function toForm(data: CandidateReviewData): EditableForm {
       candidate.years_of_experience === null ? "" : String(candidate.years_of_experience),
     highest_education: candidate.highest_education ?? "",
     skills: candidate.skills.join("\n"),
+    certifications: candidate.certifications.join("\n"),
+    languages: candidate.languages.join("\n"),
+    awards: candidate.awards.join("\n"),
+    self_evaluation: candidate.self_evaluation ?? "",
   };
 }
 
@@ -125,6 +137,10 @@ export default function CandidateReviewPage() {
           .split("\n")
           .map((item) => item.trim())
           .filter(Boolean),
+        certifications: splitLines(form.certifications),
+        languages: splitLines(form.languages),
+        awards: splitLines(form.awards),
+        self_evaluation: form.self_evaluation || null,
       });
       setMessage("修正已保存");
       await loadData();
@@ -235,6 +251,31 @@ export default function CandidateReviewPage() {
               />
             </label>
 
+            <MultiLineField
+              label="证书"
+              value={form.certifications}
+              onChange={(v) => setField("certifications", v)}
+              onLocate={() => locateField("certifications")}
+            />
+            <MultiLineField
+              label="语言能力"
+              value={form.languages}
+              onChange={(v) => setField("languages", v)}
+              onLocate={() => locateField("languages")}
+            />
+            <MultiLineField
+              label="奖项荣誉"
+              value={form.awards}
+              onChange={(v) => setField("awards", v)}
+              onLocate={() => locateField("awards")}
+            />
+            <MultiLineField
+              label="自我评价"
+              value={form.self_evaluation}
+              onChange={(v) => setField("self_evaluation", v)}
+              onLocate={() => locateField("self_evaluation")}
+            />
+
             <div className="mt-5 rounded-md bg-muted p-4">
               <h3 className="text-sm font-semibold">待确认字段</h3>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -328,6 +369,37 @@ function Field({
       <input className="input mt-2" value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
+}
+
+function MultiLineField({
+  label,
+  value,
+  onChange,
+  onLocate,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onLocate: () => void;
+}) {
+  return (
+    <label className="mt-4 block">
+      <span className="flex items-center justify-between gap-3 text-sm font-medium">
+        {label}
+        <button type="button" onClick={onLocate} className="text-xs font-semibold text-primary">
+          定位
+        </button>
+      </span>
+      <textarea className="input mt-2 min-h-24 resize-y" value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function splitLines(value: string) {
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function resolveExtractionRange(

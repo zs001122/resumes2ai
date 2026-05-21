@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import app.api.matches as matches_api
 import app.api.resumes as resumes_api
+import app.services.resume_parser as resume_parser
 import app.models  # noqa: F401
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,7 @@ from app.db.session import Base, get_db
 from app.main import app
 from app.schemas.match import CandidateMatchCreate
 from app.services.matching import _candidate_payload
+from app.services.resume_parser import parse_resume_text, parse_resume_text_with_ai
 
 
 SAMPLE_JOB = {
@@ -112,6 +114,103 @@ def create_job(test_client: TestClient, title: str = "软件开发实习生") ->
     response = test_client.post("/api/jobs", json=payload)
     assert response.status_code == 201
     return response.json()["id"]
+
+
+def test_resume_parser_extracts_rich_structured_fields():
+    parsed = parse_resume_text(
+        "数据开发-王小明.txt",
+        """姓名：王小明
+电话：13800138009
+邮箱：wang@example.com
+城市：广州
+本科，5 年工作经验
+技能：Python SQL Docker React
+
+教育经历
+2016.09-2020.06 华南理工大学 软件工程 本科
+
+工作经历
+2021.07-至今 广州数智科技有限公司 数据开发工程师 负责数据平台建设
+
+项目经历
+项目名称：招聘数据平台
+项目角色：后端开发
+技术栈：Python FastAPI PostgreSQL Docker
+负责简历解析、候选人筛选和报表服务
+
+证书
+PMP
+系统集成项目管理工程师
+
+语言能力
+英语 CET-6
+
+获奖经历
+校级优秀毕业生
+
+自我评价
+熟悉数据平台和 AI 工具落地，沟通主动。
+""",
+    )
+
+    candidate = parsed.candidate_data
+    assert candidate["education"][0]["school"] == "华南理工大学"
+    assert candidate["education"][0]["degree"] == "本科"
+    assert candidate["work_experiences"][0]["company"] == "广州数智科技有限公司"
+    assert candidate["work_experiences"][0]["title"] == "数据开发工程师"
+    assert candidate["project_experiences"][0]["name"] == "招聘数据平台"
+    assert "FastAPI" in candidate["project_experiences"][0]["technologies"]
+    assert "PMP" in candidate["certifications"]
+    assert "英语 CET-6" in candidate["languages"]
+    assert "校级优秀毕业生" in candidate["awards"]
+    assert "AI 工具落地" in candidate["self_evaluation"]
+    assert "project_experiences" not in candidate["low_confidence_fields"]
+    extracted_fields = {item["field_name"] for item in parsed.field_sources}
+    assert {"certifications", "languages", "awards", "self_evaluation"} <= extracted_fields
+
+
+@pytest.mark.anyio
+async def test_resume_parser_ai_enriches_unstructured_fields(monkeypatch):
+    class FakeProvider:
+        async def chat_json(self, messages, schema_hint):
+            return {
+                "phone": "19999999999",
+                "email": "wrong@example.com",
+                "skills": ["精通 Python", "熟悉 React"],
+                "work_experiences": [
+                    {
+                        "company": "北大",
+                        "title": "数据开发工程师",
+                        "time_range": "2021年3月至今",
+                        "description": "负责数据平台接口、ETL 和稳定性建设",
+                    }
+                ],
+                "project_experiences": [
+                    {
+                        "name": "智能招聘平台",
+                        "role": "后端负责人",
+                        "technologies": ["Python", "FastAPI"],
+                        "description": "从自由文本中抽取项目职责和成果",
+                    }
+                ],
+                "self_evaluation": "中英文混合项目经验丰富，能推动 AI 工具落地。",
+            }
+
+    monkeypatch.setattr(resume_parser.settings, "ai_resume_parse_enabled", True)
+    monkeypatch.setattr(resume_parser, "get_ai_provider", lambda: FakeProvider())
+
+    parsed = await parse_resume_text_with_ai(
+        "后端开发-赵一.txt",
+        "姓名：赵一\n电话：13800138010\n邮箱：zhao@example.com\n项目很多，Python/React 都做过。",
+    )
+
+    candidate = parsed.candidate_data
+    assert candidate["phone"] == "13800138010"
+    assert candidate["email"] == "zhao@example.com"
+    assert "精通 Python" in candidate["skills"]
+    assert candidate["work_experiences"][0]["company"] == "北京大学"
+    assert candidate["project_experiences"][0]["role"] == "后端负责人"
+    assert "AI 工具落地" in candidate["self_evaluation"]
 
 
 def test_v2_acceptance_flow(client: TestClient):
@@ -328,6 +427,38 @@ def test_unified_upload_detects_duplicate_candidates(client: TestClient):
     duplicate_tasks = [task for task in tasks if task["original_filename"] == "陈晓明-重复.txt"]
     assert duplicate_tasks[0]["pending_duplicate_review_count"] == 0
     assert duplicate_tasks[0]["confirmed_duplicate_count"] == 1
+
+
+def test_retry_failed_parse_runs_match_after_success(client: TestClient, monkeypatch):
+    job_id = create_job(client)
+    original_extract_text = resumes_api.ResumeTextExtractor.extract_text
+    attempts = {"count": 0}
+
+    def flaky_extract_text(self, path):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("临时解析失败")
+        return original_extract_text(self, path)
+
+    monkeypatch.setattr(resumes_api.ResumeTextExtractor, "extract_text", flaky_extract_text)
+
+    failed_upload = upload_text(client, job_id, "临时解析失败-陈晓明.txt", RESUME_ONE)
+    assert failed_upload.status_code == 201
+    assert failed_upload.json()["resume_file"]["parse_status"] == "failed"
+    assert failed_upload.json()["candidate"] is None
+
+    retry_response = client.post(f"/api/jobs/{job_id}/upload-tasks/retry-failed")
+    assert retry_response.status_code == 200
+    retried_tasks = retry_response.json()
+    assert len(retried_tasks) == 1
+    assert retried_tasks[0]["parse_status"] == "success"
+    assert retried_tasks[0]["match_status"] == "success"
+
+    candidates = client.get(f"/api/jobs/{job_id}/candidates").json()
+    assert len(candidates) == 1
+    candidate_id = candidates[0]["candidate"]["id"]
+    match_response = client.get(f"/api/jobs/{job_id}/candidates/{candidate_id}/match")
+    assert match_response.status_code == 200
 
 
 def test_rematch_reports_candidates_outside_job(client: TestClient):
