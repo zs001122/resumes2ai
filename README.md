@@ -95,10 +95,18 @@ API 手动验收：
 python scripts/api_tests/06_v2_acceptance.py
 ```
 
+真实样本解析与匹配诊断：
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe scripts\diagnose_resume_parse_match.py --sample-dir ..\简历数据 --job-profile software-intern
+```
+
 ## 文档入口
 
 - [V2_STATUS_AND_ROADMAP.md](docs/V2_STATUS_AND_ROADMAP.md)：V2 当前状态、收缩边界和下一大版本候选池。
 - [V2_RELEASE_CHECKLIST.md](docs/V2_RELEASE_CHECKLIST.md)：V2 稳定化、验收、演示和交付检查表。
+- [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](docs/RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)：基于真实简历样本的结构化提取与匹配优化实施方案。
 - [V2_ACCEPTANCE_GUIDE.md](docs/V2_ACCEPTANCE_GUIDE.md)：V2 自动验收和手动回归路径。
 - [HR_RESUME_SCREENING_TOOL_V2_DESIGN.md](docs/HR_RESUME_SCREENING_TOOL_V2_DESIGN.md)：V2 产品设计和模块边界。
 

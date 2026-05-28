@@ -17,6 +17,7 @@
 - [V2_ISSUE_FIX_PLAN.md](./V2_ISSUE_FIX_PLAN.md)：岗位候选人边界修复历史方案。
 - [V2_ACCEPTANCE_GUIDE.md](./V2_ACCEPTANCE_GUIDE.md)：当前验收命令和回归路径。
 - [V2_RELEASE_CHECKLIST.md](./V2_RELEASE_CHECKLIST.md)：V2 稳定化、演示、清理和交付检查表。
+- [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](./RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)：真实简历样本暴露的结构化提取与匹配评分优化实施方案。
 
 ## 2. 当前结论
 
@@ -48,6 +49,7 @@ V2 冻结后的允许事项：
 - 文档、部署、演示数据和启动说明补齐。
 - 不改变产品范围的小 UI 文案、状态展示和错误提示修正。
 - 数据迁移一致性和本地开发体验修正。
+- 影响现有主链路质量的解析、匹配和证据解释缺陷修复，具体以 [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](./RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md) 为准。
 
 V2 冻结后的禁止事项：
 
@@ -68,6 +70,7 @@ V2 稳定化阶段只围绕交付闭环展开：
 - 补齐启动说明：确保 README 和验收说明能让新开发者启动前后端。
 - 标记已知限制：把未进入 V2 的功能统一放入下一大版本候选池。
 - 修复阻断缺陷：只处理影响验收和交付的 bug。
+- 修复真实样本暴露的简历结构化提取和本地兜底匹配问题：年限误判、段落边界、项目证据和分维度匹配，实施清单见 [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](./RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)。
 - 冻结范围：任何新能力都必须先进入下一大版本规划，不直接进入 V2。
 
 具体交付步骤见 [V2_RELEASE_CHECKLIST.md](./V2_RELEASE_CHECKLIST.md)。
@@ -173,7 +176,16 @@ V2 稳定化阶段只围绕交付闭环展开：
 - 复核动作写入候选人时间线。
 - 不合并候选人，不修改候选人主档案。
 
-### 3.13 工程与验收
+### 3.13 真实样本解析与匹配质量修复
+
+- 新增 `backend/app/services/resume_sections.py`，统一处理简历 section 切分、空格标题归一、嵌入式标题识别、无标题工作/项目段兜底推断。
+- 简历解析器已把年限提取从全文扫描改为可信来源优先：岗位方向明确的自述年限优先，其次使用工作经历时间区间，不再把应届届别、年份、教育经历和校园经历误算为工作年限。
+- 教育、工作、项目抽取已补齐多行合并、教育兜底、校园 section 边界、日期独立行合并、伪公司过滤、项目角色和技术栈抽取。
+- 技能抽取已增加 alias 归一，例如 `SpringBoot`、`RocketMQ`、`MyBatis-Plus`、`Vue3`、`ETL`、`数据仓库` 等。
+- 本地兜底匹配已从“技能字面命中”升级为分维度评分，覆盖必备技能、岗位相关技能、项目证据、年限、学历、城市和排除项风险，并输出更可复核的 matched points / weak points。
+- 新增 `backend/scripts/diagnose_resume_parse_match.py`，可对 `简历数据` 目录批量输出解析结果、低置信字段和本地匹配结果，用作后续解析/匹配改动的回归入口。
+
+### 3.14 工程与验收
 
 - 后端 pytest 覆盖 V2 主链路、岗位边界、统一上传、重复识别、标准版本、重评、重复复核和规则+AI 简历结构化抽取。
 - 后端 ruff 可执行。
@@ -308,6 +320,7 @@ V2 Stabilization：V2 稳定化与交付
 cd backend
 .\venv\Scripts\python.exe -m pytest tests
 .\venv\Scripts\python.exe -m ruff check app tests
+.\venv\Scripts\python.exe scripts\diagnose_resume_parse_match.py --sample-dir ..\简历数据 --job-profile software-intern
 
 cd ..\frontend
 npm run lint
@@ -323,6 +336,7 @@ npm run build
 - `V2_STATUS_AND_ROADMAP.md`：新增，作为 V2 当前状态和后续路线图的权威总览。
 - `V2_ACCEPTANCE_GUIDE.md`：保留，作为验收命令和手动回归入口。
 - `V2_RELEASE_CHECKLIST.md`：新增，作为 V2 稳定化和交付检查表。
+- `RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md`：新增，作为真实样本解析与匹配质量修复的实施入口。
 - `backend/README.md`、`frontend/README.md`：保留，作为局部启动和验证说明。
 - `scripts/api_tests/README.md`：保留，作为 API 手动验收脚本说明。
 - `V2_TASK_BREAKDOWN.md`：保留为历史归档，不再作为当前计划入口。

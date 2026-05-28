@@ -16,6 +16,7 @@ from app.main import app
 from app.schemas.match import CandidateMatchCreate
 from app.services.matching import _candidate_payload
 from app.services.resume_parser import parse_resume_text, parse_resume_text_with_ai
+from app.services.resume_sections import extract_sections, normalized_lines
 
 
 SAMPLE_JOB = {
@@ -167,6 +168,147 @@ PMP
     assert "project_experiences" not in candidate["low_confidence_fields"]
     extracted_fields = {item["field_name"] for item in parsed.field_sources}
     assert {"certifications", "languages", "awards", "self_evaluation"} <= extracted_fields
+
+
+def test_resume_sections_handles_spaced_and_inferred_sections():
+    lines = normalized_lines(
+        """李浩斌
+教 育 经历
+广州大学 2016 年 09 月 - 2020 年 07 月
+网络工程 本科 计算机学院
+项 目 经 历
+HappyCommunity 社 交 网 站
+后端开发 （2023 年 6 月~2023 年 8 月）
+工 作 经 历
+广州华资软件技术有限公司 2023 年 09 月~2023 年 11 月
+java 开发实习生 政法行业事业部 广州
+"""
+    )
+    sections = extract_sections(lines)
+
+    assert sections["education"]
+    assert sections["project"][0] == "HappyCommunity 社 交 网 站"
+    assert sections["work"][0].startswith("广州华资软件技术有限公司")
+
+    inferred_lines = normalized_lines(
+        """杨晓飞
+长城计算机软件与系统有限公司 etl数据处理工程师
+2022.01-至今
+市场监管数据综合治理平台项目 ETL数据处理工程师 2022.01-2023.11
+项目概况：数据采集并整理开发。
+"""
+    )
+    inferred = extract_sections(inferred_lines)
+
+    assert inferred["work"][0].startswith("长城计算机软件与系统有限公司")
+    assert inferred["project"][0].startswith("市场监管数据综合治理平台项目")
+
+
+def test_resume_years_prefers_explicit_header_over_timeline():
+    parsed = parse_resume_text(
+        "数据开发-杨晓飞.txt",
+        """杨晓飞
+男 | 年龄：29岁 | 18126839220 | 1104314557@qq.com 7年工作经验 | 求职意向：数据开发 | 期望城市：广州
+长城计算机软件与系统有限公司 etl数据处理工程师
+2022.01-至今
+广州源越通科技有限公司 数据分析师 2016.10-2018.04
+教育经历
+广西工业职业技术学院 专科 电子信息工程 2010-2013
+""",
+    )
+
+    years_source = next(item for item in parsed.field_sources if item["field_name"] == "years_of_experience")
+    assert parsed.candidate_data["years_of_experience"] == 7.0
+    assert years_source["source_text"] == "7年"
+    assert years_source["confidence"] == 0.85
+
+
+def test_resume_years_prefers_role_specific_experience_over_generic_total():
+    parsed = parse_resume_text(
+        "数据开发-杨晓飞.txt",
+        """杨晓飞
+男 | 年龄：29岁 | 18126839220 | 1104314557@qq.com 7年工作经验 | 求职意向：数据开发 | 期望城市：广州
+1.本人有5年数据开发经验，具有数据分析和数据清洗、转换、加载的项目实践经验；
+工作经历
+长城计算机软件与系统有限公司 etl数据处理工程师
+2022.01-至今
+广州弘诺电子科技有限公司 ETL工程师 2018.05-2021.12
+广州源越通科技有限公司 数据分析师 2016.10-2018.04
+""",
+    )
+
+    years_source = next(item for item in parsed.field_sources if item["field_name"] == "years_of_experience")
+    assert parsed.candidate_data["years_of_experience"] == 5.0
+    assert years_source["source_text"] == "5年"
+    assert years_source["confidence"] == 0.88
+
+
+def test_campus_project_role_does_not_create_work_experience():
+    parsed = parse_resume_text(
+        "嵌入式开发-翁鑫源.txt",
+        """翁鑫源
+应届生
+项目经历
+2022/03-2022/04 STM32 蓝牙智能小车项目 嵌入式开发
+工作岗位：广州大学电子信息楼 软件设计实物仿真助理
+负责工作：原理分析和系统框图、软件设计与 Proteus 仿真。
+教育经历
+广州大学 本科 电子信息工程 2020-2024
+""",
+    )
+
+    candidate = parsed.candidate_data
+    assert candidate["work_experiences"] == []
+    assert candidate["project_experiences"]
+    assert candidate["project_experiences"][0]["role"] == "广州大学电子信息楼 软件设计实物仿真助理"
+    assert "work_experiences" in candidate["low_confidence_fields"]
+    assert "project_experiences" not in candidate["low_confidence_fields"]
+
+
+def test_campus_section_stops_work_experience_and_preserves_spaced_date_range():
+    parsed = parse_resume_text(
+        "24年应届生-李浩斌.pdf",
+        """李浩斌
+实习经历
+广州华资软件技术有限公司 软件开发实习生
+2023 年 09 月~2023 年 11 月
+负责政务系统接口联调和问题修复。
+校园 经历
+2021 至 2022 学年担任学校计算机学院学生党建工作委员会副主席
+2022 至 2023 学年担任班级干部
+""",
+    )
+
+    candidate = parsed.candidate_data
+    assert candidate["years_of_experience"] == 0.2
+    assert len(candidate["work_experiences"]) == 1
+    work = candidate["work_experiences"][0]
+    assert work["company"] == "广州华资软件技术有限公司"
+    assert work["time_range"] == "2023 年 09 月~2023 年 11 月"
+    assert "校园" not in work["description"]
+
+
+def test_unheaded_education_is_extracted_before_project_sections():
+    parsed = parse_resume_text(
+        "24年应届生-翁鑫源.docx",
+        """翁鑫源
+求职意向：后端开发
+2017/09-2020/07 广州学院 专科 电子信息工程
+主修课程：C 语言程序设计、数据结构与算法
+2020/09-2024/07 广州大学 本科 电子信息工程
+项目经历
+2022/03-2022/04 STM32 蓝牙智能小车项目 嵌入式开发
+工作岗位：广州大学电子信息楼 软件设计实物仿真助理
+校内外实践活动
+2023/05-2023/05 广州小蚁智控科技有限公司 实习员工
+""",
+    )
+
+    education = parsed.candidate_data["education"]
+    assert len(education) == 2
+    assert education[0]["school"] == "广州学院"
+    assert education[1]["school"] == "广州大学"
+    assert parsed.candidate_data["highest_education"] == "本科"
 
 
 @pytest.mark.anyio
