@@ -47,6 +47,16 @@ resumes2ai/
 
 ## 本地启动
 
+推荐一键启动前后端：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run-dev.ps1
+```
+
+该脚本会补齐本地环境文件、执行后端迁移、启动后端 `8010` 和前端 `3000`，按 `Ctrl+C` 可同时停止两个服务。
+
+也可以分别启动：
+
 后端：
 
 ```powershell
@@ -104,10 +114,15 @@ cd backend
 
 ## 文档入口
 
-- [V2_STATUS_AND_ROADMAP.md](docs/V2_STATUS_AND_ROADMAP.md)：V2 当前状态、收缩边界和下一大版本候选池。
-- [V2_RELEASE_CHECKLIST.md](docs/V2_RELEASE_CHECKLIST.md)：V2 稳定化、验收、演示和交付检查表。
-- [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](docs/RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)：基于真实简历样本的结构化提取与匹配优化实施方案。
-- [V2_ACCEPTANCE_GUIDE.md](docs/V2_ACCEPTANCE_GUIDE.md)：V2 自动验收和手动回归路径。
-- [HR_RESUME_SCREENING_TOOL_V2_DESIGN.md](docs/HR_RESUME_SCREENING_TOOL_V2_DESIGN.md)：V2 产品设计和模块边界。
+当前交付入口：
+
+- [V2_STATUS_AND_ROADMAP.md](docs/V2_STATUS_AND_ROADMAP.md)：V2 完成范围、冻结边界、收缩结论和下一大版本候选池。
+- [V2_ACCEPTANCE_GUIDE.md](docs/V2_ACCEPTANCE_GUIDE.md)：V2 启动、自动验证、演示数据、手动验收、已知限制和冻结规则。
+
+设计与历史追溯：
+
+- [HR_RESUME_SCREENING_TOOL_V2_DESIGN.md](docs/HR_RESUME_SCREENING_TOOL_V2_DESIGN.md)：V2 产品设计和模块边界，仅作设计依据。
+- [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](docs/RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)：真实简历样本解析与匹配质量修复记录，第一轮已收口，后续只作回归参考。
+- [V2_RELEASE_CHECKLIST.md](docs/V2_RELEASE_CHECKLIST.md)：旧链接兼容页，正文已并入 V2 验收说明。
 
 历史拆解文档保留用于追溯，不再作为当前计划入口。

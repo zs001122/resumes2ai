@@ -19,6 +19,11 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Local runtime data
+runtime/
+backend/*.log
+backend/*.pid
+frontend/*.log
+frontend/*.pid
 backend/data/*.db
 backend/uploads/*
 !backend/uploads/.gitkeep

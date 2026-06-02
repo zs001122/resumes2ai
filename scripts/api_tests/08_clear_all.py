@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import shutil
@@ -117,6 +117,8 @@ def clear_upload_dir() -> int:
     shutil.rmtree(upload_root)
     upload_root.mkdir(parents=True, exist_ok=True)
     (upload_root / "resumes").mkdir(parents=True, exist_ok=True)
+    # Restore .gitkeep so the uploads directory stays tracked.
+    (upload_root / ".gitkeep").write_text("", encoding="utf-8")
     return file_count
 
 

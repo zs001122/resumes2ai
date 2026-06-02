@@ -8,16 +8,21 @@
 - V2 功能边界在哪里收口。
 - 哪些新功能必须归并到下一大版本。
 
-历史拆解文档仍保留用于追溯实现过程：
+当前只维护三类 V2 入口：
+
+- `README.md`：项目入口，记录当前交付边界、启动方式和验证命令。
+- [V2_STATUS_AND_ROADMAP.md](./V2_STATUS_AND_ROADMAP.md)：V2 当前状态、冻结规则、已完成范围和下一大版本候选池的权威总览。
+- [V2_ACCEPTANCE_GUIDE.md](./V2_ACCEPTANCE_GUIDE.md)：V2 启动、自动验证、演示数据、手动验收、已知限制和冻结规则。
+
+历史拆解文档仍保留用于追溯实现过程，不再作为当前计划入口：
 
 - [HR_RESUME_SCREENING_TOOL_V2_DESIGN.md](./HR_RESUME_SCREENING_TOOL_V2_DESIGN.md)：V2 产品设计与模块边界。
 - [V2_TASK_BREAKDOWN.md](./V2_TASK_BREAKDOWN.md)：V2 Phase 7-16 历史任务拆解。
 - [V2_1_TASK_BREAKDOWN.md](./V2_1_TASK_BREAKDOWN.md)：V2.1 Phase 18-20 历史任务拆解。
 - [V2_1_1_TASK_BREAKDOWN.md](./V2_1_1_TASK_BREAKDOWN.md)：V2.1.1 / V2.1.2 历史任务拆解。
 - [V2_ISSUE_FIX_PLAN.md](./V2_ISSUE_FIX_PLAN.md)：岗位候选人边界修复历史方案。
-- [V2_ACCEPTANCE_GUIDE.md](./V2_ACCEPTANCE_GUIDE.md)：当前验收命令和回归路径。
-- [V2_RELEASE_CHECKLIST.md](./V2_RELEASE_CHECKLIST.md)：V2 稳定化、演示、清理和交付检查表。
-- [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](./RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)：真实简历样本暴露的结构化提取与匹配评分优化实施方案。
+- [V2_RELEASE_CHECKLIST.md](./V2_RELEASE_CHECKLIST.md)：兼容旧链接的归档页，正文已并入验收说明。
+- [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](./RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)：真实简历样本解析与匹配质量缺陷修复记录，第一轮已完成，后续只作为回归参考。
 
 ## 2. 当前结论
 
@@ -40,7 +45,7 @@ V2 到 V2.1.2 已经形成“可试用招聘工作台”的主闭环：
 
 V2.1.2 是 V2 功能截止版本。V2 后续不再新增 V2.1.x 功能版本，只进入稳定化、验收和交付阶段。
 
-项目当前已经完成整体收缩：V2 只交付岗位驱动的招聘初筛闭环，不再把后续人才库、报告、上传形态、后台队列和外部系统集成塞回当前版本。根 README、验收指南、发布检查表和 API 脚本说明共同作为当前交付入口；历史任务拆解只用于追溯，不再作为实施计划。
+项目当前已经完成整体收缩：V2 只交付岗位驱动的招聘初筛闭环，不再把后续人才库、报告、上传形态、后台队列和外部系统集成塞回当前版本。根 README、状态总览、验收说明和 API 脚本说明共同作为当前交付入口；历史任务拆解只用于追溯，不再作为实施计划。
 
 V2 冻结后的允许事项：
 
@@ -73,7 +78,7 @@ V2 稳定化阶段只围绕交付闭环展开：
 - 修复真实样本暴露的简历结构化提取和本地兜底匹配问题：年限误判、段落边界、项目证据和分维度匹配，实施清单见 [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](./RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)。
 - 冻结范围：任何新能力都必须先进入下一大版本规划，不直接进入 V2。
 
-具体交付步骤见 [V2_RELEASE_CHECKLIST.md](./V2_RELEASE_CHECKLIST.md)。
+具体交付步骤见 [V2_ACCEPTANCE_GUIDE.md](./V2_ACCEPTANCE_GUIDE.md)。
 
 ## 3. 已完成范围
 
@@ -319,7 +324,7 @@ V2 Stabilization：V2 稳定化与交付
 ```powershell
 cd backend
 .\venv\Scripts\python.exe -m pytest tests
-.\venv\Scripts\python.exe -m ruff check app tests
+.\venv\Scripts\python.exe -m ruff check app tests scripts
 .\venv\Scripts\python.exe scripts\diagnose_resume_parse_match.py --sample-dir ..\简历数据 --job-profile software-intern
 
 cd ..\frontend
@@ -327,19 +332,29 @@ npm run lint
 npm run build
 ```
 
-## 8. 文档归并结果
+## 8. V2 文档收缩结果
 
-当前建议的文档职责如下：
+V2 文档已经从“开发推进态”收缩为“交付验收态”。后续讨论、验收和缺陷修复只以当前交付入口为准；历史拆解只用于追溯，不再产生新的 V2 任务。
 
-- `README.md`：当前项目入口，记录收缩后的交付边界、启动方式和验证命令。
-- `HR_RESUME_SCREENING_TOOL_V2_DESIGN.md`：保留，作为产品设计和模块边界文档。
-- `V2_STATUS_AND_ROADMAP.md`：新增，作为 V2 当前状态和后续路线图的权威总览。
-- `V2_ACCEPTANCE_GUIDE.md`：保留，作为验收命令和手动回归入口。
-- `V2_RELEASE_CHECKLIST.md`：新增，作为 V2 稳定化和交付检查表。
-- `RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md`：新增，作为真实样本解析与匹配质量修复的实施入口。
-- `backend/README.md`、`frontend/README.md`：保留，作为局部启动和验证说明。
-- `scripts/api_tests/README.md`：保留，作为 API 手动验收脚本说明。
-- `V2_TASK_BREAKDOWN.md`：保留为历史归档，不再作为当前计划入口。
-- `V2_1_TASK_BREAKDOWN.md`：保留为历史归档，不再作为当前计划入口。
-- `V2_1_1_TASK_BREAKDOWN.md`：保留为历史归档，不再作为当前计划入口。
-- `V2_ISSUE_FIX_PLAN.md`：保留为历史归档，岗位边界问题已修复。
+当前交付入口：
+
+- `README.md`：项目入口，记录当前交付边界、启动方式和验证命令。
+- `V2_STATUS_AND_ROADMAP.md`：V2 当前状态、冻结规则、已完成范围和下一大版本候选池的权威总览。
+- `V2_ACCEPTANCE_GUIDE.md`：V2 启动、自动验证、演示数据、手动验收、已知限制和冻结规则。
+- `RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md`：真实样本解析与匹配质量缺陷修复记录，第一轮已完成，后续只作为回归参考。
+
+设计依据与历史归档：
+
+- `HR_RESUME_SCREENING_TOOL_V2_DESIGN.md`：保留为产品设计和模块边界依据，不再作为当前计划入口。
+- `V2_TASK_BREAKDOWN.md`：保留 V2 Phase 7-16 历史任务拆解。
+- `V2_1_TASK_BREAKDOWN.md`：保留 V2.1 Phase 18-20 历史任务拆解。
+- `V2_1_1_TASK_BREAKDOWN.md`：保留 V2.1.1 / V2.1.2 历史任务拆解。
+- `V2_ISSUE_FIX_PLAN.md`：保留岗位候选人边界问题修复历史，该问题已修复。
+- `V2_RELEASE_CHECKLIST.md`：保留为旧链接兼容页，交付检查正文已并入 `V2_ACCEPTANCE_GUIDE.md`。
+- `backend/README.md`、`frontend/README.md`、`scripts/api_tests/README.md`：保留为局部启动和脚本说明。
+
+收缩后的执行规则：
+
+- V2 不再新增功能、数据模型、上传形态、导出形态或后台任务架构。
+- 只允许修复阻断验收、演示、启动或现有主链路质量的问题。
+- 已列入下一大版本候选池的能力不得回流到 V2。
