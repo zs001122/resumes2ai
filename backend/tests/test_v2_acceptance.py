@@ -390,6 +390,15 @@ def test_v2_acceptance_flow(client: TestClient):
     candidate_id = candidates[0]["candidate"]["id"]
     candidate_ids = [item["candidate"]["id"] for item in candidates]
 
+    jobs_payload = client.get("/api/jobs").json()
+    listed_job = next(item for item in jobs_payload if item["id"] == job_id)
+    assert listed_job["candidate_count"] == 2
+    assert listed_job["high_match_count"] == 2
+    assert listed_job["pending_count"] == 2
+    funnel_payload = client.get(f"/api/jobs/{job_id}/funnel").json()
+    assert funnel_payload["high_match"] == 2
+    assert funnel_payload["pending"] == 2
+
     bulk_response = client.post(
         f"/api/jobs/{job_id}/candidates/bulk-status",
         json={"candidate_ids": [*candidate_ids, "missing-candidate"], "status": "pending_contact"},

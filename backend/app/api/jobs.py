@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import distinct, func, select
+from sqlalchemy import and_, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -37,7 +37,68 @@ def list_jobs(
     db: Session = Depends(get_db),
 ) -> list[JobListItem]:
     jobs = JobRepository(db).list(status=status_filter)
-    return [JobListItem.model_validate(job) for job in jobs]
+    job_ids = [job.id for job in jobs]
+    candidate_counts = count_successful_candidates_by_job(db, job_ids)
+    pending_counts = count_pending_candidates_by_job(db, job_ids)
+    high_match_counts = count_high_matches_by_job(db, job_ids)
+    return [
+        JobListItem(
+            **JobRead.model_validate(job).model_dump(),
+            candidate_count=candidate_counts.get(job.id, 0),
+            high_match_count=high_match_counts.get(job.id, 0),
+            pending_count=pending_counts.get(job.id, 0),
+        )
+        for job in jobs
+    ]
+
+
+def count_successful_candidates_by_job(db: Session, job_ids: list[str]) -> dict[str, int]:
+    if not job_ids:
+        return {}
+    rows = db.execute(
+        select(ResumeFile.job_id, func.count(distinct(ResumeFile.candidate_id)))
+        .where(
+            ResumeFile.job_id.in_(job_ids),
+            ResumeFile.parse_status == "success",
+            ResumeFile.candidate_id.is_not(None),
+        )
+        .group_by(ResumeFile.job_id)
+    ).all()
+    return {job_id: int(count) for job_id, count in rows}
+
+
+def count_pending_candidates_by_job(db: Session, job_ids: list[str]) -> dict[str, int]:
+    if not job_ids:
+        return {}
+    rows = db.execute(
+        select(ResumeFile.job_id, func.count(distinct(ResumeFile.candidate_id)))
+        .outerjoin(
+            CandidateJobStatus,
+            and_(
+                CandidateJobStatus.job_id == ResumeFile.job_id,
+                CandidateJobStatus.candidate_id == ResumeFile.candidate_id,
+            ),
+        )
+        .where(
+            ResumeFile.job_id.in_(job_ids),
+            ResumeFile.parse_status == "success",
+            ResumeFile.candidate_id.is_not(None),
+            or_(CandidateJobStatus.id.is_(None), CandidateJobStatus.status == "pending"),
+        )
+        .group_by(ResumeFile.job_id)
+    ).all()
+    return {job_id: int(count) for job_id, count in rows}
+
+
+def count_high_matches_by_job(db: Session, job_ids: list[str]) -> dict[str, int]:
+    if not job_ids:
+        return {}
+    rows = db.execute(
+        select(CandidateMatch.job_id, func.count(distinct(CandidateMatch.candidate_id)))
+        .where(CandidateMatch.job_id.in_(job_ids), CandidateMatch.score >= 80)
+        .group_by(CandidateMatch.job_id)
+    ).all()
+    return {job_id: int(count) for job_id, count in rows}
 
 
 @router.post("", response_model=JobRead, status_code=status.HTTP_201_CREATED)
@@ -124,6 +185,7 @@ def get_job_funnel(job_id: str, db: Session = Depends(get_db)) -> JobFunnelStats
         .group_by(CandidateJobStatus.status)
     ).all()
     status_counts = {status_name: count for status_name, count in status_rows}
+    pending = count_pending_candidates_by_job(db, [job_id]).get(job_id, 0)
     uploaded = int(db.scalar(select(func.count()).select_from(ResumeFile).where(ResumeFile.job_id == job_id)) or 0)
     high_match = int(
         db.scalar(
@@ -144,7 +206,7 @@ def get_job_funnel(job_id: str, db: Session = Depends(get_db)) -> JobFunnelStats
     )
     return JobFunnelStats(
         uploaded=uploaded,
-        pending=int(status_counts.get("pending", 0)),
+        pending=pending,
         favorite=int(status_counts.get("favorite", 0)),
         pending_contact=int(status_counts.get("pending_contact", 0)),
         rejected=int(status_counts.get("rejected", 0)),
