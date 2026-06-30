@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.candidate import Candidate
 from app.models.correction import FieldCorrectionLog
-from app.models.resume import ResumeFieldExtraction, ResumeFile
+from app.models.resume import (
+    ResumeFieldCandidate,
+    ResumeFieldExtraction,
+    ResumeFile,
+    ResumeParseBlock,
+    ResumeParseRun,
+)
 from app.repositories.jobs import JobRepository, job_standard_criteria
 from app.repositories.matches import CandidateMatchRepository
 from app.repositories.resumes import ResumeRepository
@@ -32,6 +38,9 @@ from app.schemas.resume import (
     ResumeFieldExtractionRead,
     ResumeFileRead,
     ResumePreview,
+    ResumeFieldCandidateRead,
+    ResumeParseBlockRead,
+    ResumeParseRunRead,
     ResumeUploadResult,
 )
 from app.schemas.v2 import (
@@ -47,7 +56,7 @@ from app.schemas.v2 import (
 from app.services.matching import generate_candidate_match
 from app.services.match_explanations import build_match_explanations
 from app.services.parsers.resume_text import ResumeTextExtractor, UnsupportedResumeFileType
-from app.services.resume_parser import parse_resume_text_with_ai
+from app.services.resume_parser_vnext import parse_resume_text_vnext
 from app.services.storage.local import LocalStorageService
 
 router = APIRouter(tags=["resumes"])
@@ -246,6 +255,28 @@ async def parse_resume_file(resume_file_id: str, db: Session = Depends(get_db)) 
         if result.candidate:
             _sync_duplicate_checks(repository, v2_repository, result, task)
     return result
+
+
+
+
+@router.get("/resume-files/{resume_file_id}/parse-runs/latest", response_model=ResumeParseRunRead)
+def get_latest_resume_parse_run(
+    resume_file_id: str,
+    db: Session = Depends(get_db),
+) -> ResumeParseRunRead:
+    repository = ResumeRepository(db)
+    if not repository.get_resume_file(resume_file_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历文件不存在")
+    parse_run = repository.get_latest_parse_run(resume_file_id)
+    if not parse_run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="解析运行不存在")
+    payload = ResumeParseRunRead.model_validate(parse_run)
+    payload.blocks = [ResumeParseBlockRead.model_validate(row) for row in repository.list_parse_blocks(parse_run.id)]
+    payload.field_candidates = [
+        ResumeFieldCandidateRead.model_validate(row)
+        for row in repository.list_field_candidates(parse_run.id)
+    ]
+    return payload
 
 
 @router.get("/resume-files/{resume_file_id}/field-extractions", response_model=list[ResumeFieldExtractionRead])
@@ -718,7 +749,8 @@ async def _parse_and_save_resume(
 
     try:
         parsed_text = extractor.extract_text(original_path)
-        parsed_resume = await parse_resume_text_with_ai(resume_file.file_name, parsed_text)
+        parsed_resume_vnext = await parse_resume_text_vnext(resume_file.file_name, parsed_text)
+        parsed_resume = parsed_resume_vnext.parsed_resume
         preview_path = original_path.with_name("preview.txt")
         preview_path.write_text(parsed_text, encoding="utf-8")
 
@@ -739,6 +771,43 @@ async def _parse_and_save_resume(
                     **source,
                 )
                 for source in parsed_resume.field_sources
+            ],
+        )
+        repository.create_parse_run(
+            ResumeParseRun(
+                resume_file_id=resume_file.id,
+                candidate_id=candidate.id,
+                parser_version=parsed_resume_vnext.parser_version,
+                ai_enabled=parsed_resume_vnext.ai_enabled,
+                status="success",
+                quality_score=parsed_resume_vnext.quality_score,
+                warnings=parsed_resume_vnext.warnings,
+            ),
+            [
+                ResumeParseBlock(
+                    parse_run_id="",
+                    block_type=block.block_type,
+                    title=block.title,
+                    text=block.text,
+                    start_offset=block.start_offset,
+                    end_offset=block.end_offset,
+                    confidence=block.confidence,
+                    inferred=block.inferred,
+                )
+                for block in parsed_resume_vnext.blocks
+            ],
+            [
+                ResumeFieldCandidate(
+                    parse_run_id="",
+                    field_name=field.field_name,
+                    value_json=field.value_json,
+                    source_text=field.source_text,
+                    extractor=field.extractor,
+                    confidence=field.confidence,
+                    selected=field.selected,
+                    rejection_reason=field.rejection_reason,
+                )
+                for field in parsed_resume_vnext.field_candidates
             ],
         )
         return ResumeUploadResult(

@@ -630,3 +630,21 @@ def test_rematch_reports_candidates_outside_job(client: TestClient):
     assert payload["succeeded"] == 1
     assert payload["failed"] == 1
     assert payload["failures"][0]["candidate_id"] == candidate_b_id
+
+def test_upload_persists_vnext_parse_run(client: TestClient):
+    job_id = create_job(client, "软件开发实习生")
+    upload_response = upload_text(client, job_id, "后端开发-陈晓明.txt", RESUME_ONE)
+    assert upload_response.status_code == 201
+    resume_file_id = upload_response.json()["resume_file"]["id"]
+
+    response = client.get(f"/api/resume-files/{resume_file_id}/parse-runs/latest")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["resume_file_id"] == resume_file_id
+    assert payload["candidate_id"] == upload_response.json()["candidate"]["id"]
+    assert payload["parser_version"].startswith("resume-parser-vnext")
+    assert payload["status"] == "success"
+    assert isinstance(payload["quality_score"], float)
+    assert payload["blocks"]
+    assert any(item["field_name"] == "phone" and item["selected"] for item in payload["field_candidates"])

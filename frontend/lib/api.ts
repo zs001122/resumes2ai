@@ -69,6 +69,47 @@ export type ResumeFile = {
   updated_at: string;
 };
 
+
+export type ResumeParseBlock = {
+  id: string;
+  parse_run_id: string;
+  block_type: string;
+  title: string | null;
+  text: string;
+  start_offset: number | null;
+  end_offset: number | null;
+  confidence: number | null;
+  inferred: boolean;
+  created_at: string;
+};
+
+export type ResumeFieldCandidate = {
+  id: string;
+  parse_run_id: string;
+  field_name: string;
+  value_json: unknown;
+  source_text: string | null;
+  extractor: string;
+  confidence: number | null;
+  selected: boolean;
+  rejection_reason: string | null;
+  created_at: string;
+};
+
+export type ResumeParseRun = {
+  id: string;
+  resume_file_id: string;
+  candidate_id: string | null;
+  parser_version: string;
+  ai_enabled: boolean;
+  status: string;
+  quality_score: number | null;
+  warnings: string[];
+  created_at: string;
+  blocks: ResumeParseBlock[];
+  field_candidates: ResumeFieldCandidate[];
+};
+
 export type ResumeFieldExtraction = {
   id: string;
   resume_file_id: string;
@@ -491,6 +532,11 @@ export async function retryParseResume(resumeFileId: string) {
   return requestJson<ResumeUploadResult>(`/api/resume-files/${resumeFileId}/parse`, {
     method: "POST",
   });
+}
+
+
+export async function getLatestResumeParseRun(resumeFileId: string) {
+  return requestJson<ResumeParseRun>(`/api/resume-files/${resumeFileId}/parse-runs/latest`);
 }
 
 export async function getCandidateReviewData(jobId: string, candidateId: string) {

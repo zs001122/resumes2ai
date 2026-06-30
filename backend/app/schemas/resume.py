@@ -85,6 +85,52 @@ class ResumeFieldExtractionRead(BaseModel):
     created_at: datetime
 
 
+class ResumeParseBlockRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    parse_run_id: str
+    block_type: str
+    title: str | None
+    text: str
+    start_offset: int | None
+    end_offset: int | None
+    confidence: float | None
+    inferred: bool
+    created_at: datetime
+
+
+class ResumeFieldCandidateRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    parse_run_id: str
+    field_name: str
+    value_json: dict | list | str | int | float | bool | None
+    source_text: str | None
+    extractor: str
+    confidence: float | None
+    selected: bool
+    rejection_reason: str | None
+    created_at: datetime
+
+
+class ResumeParseRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    resume_file_id: str
+    candidate_id: str | None
+    parser_version: str
+    ai_enabled: bool
+    status: str
+    quality_score: float | None
+    warnings: list[str]
+    created_at: datetime
+    blocks: list[ResumeParseBlockRead] = []
+    field_candidates: list[ResumeFieldCandidateRead] = []
+
+
 class DuplicateCandidateRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

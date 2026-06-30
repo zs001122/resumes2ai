@@ -4,7 +4,13 @@ from app.models.candidate import Candidate
 from app.models.correction import FieldCorrectionLog
 from app.models.job import Job
 from app.models.match import CandidateMatch
-from app.models.resume import ResumeFieldExtraction, ResumeFile
+from app.models.resume import (
+    ResumeFieldCandidate,
+    ResumeFieldExtraction,
+    ResumeFile,
+    ResumeParseBlock,
+    ResumeParseRun,
+)
 from app.models.status import CandidateJobStatus
 from app.models.v2 import (
     CandidateDuplicateCheck,
@@ -26,6 +32,9 @@ __all__ = [
     "Job",
     "JobStandardVersion",
     "ResumeFieldExtraction",
+    "ResumeParseRun",
+    "ResumeParseBlock",
+    "ResumeFieldCandidate",
     "ResumeFile",
     "CandidateJobStatus",
     "CandidateNote",
