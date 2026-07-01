@@ -81,6 +81,7 @@ export default function CandidateDetailPage() {
   const [reportText, setReportText] = useState("");
   const [tags, setTags] = useState<CandidateTag[]>([]);
   const [jobHistory, setJobHistory] = useState<CandidateJobHistoryItem[]>([]);
+  const [activeEvidenceText, setActiveEvidenceText] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [tagText, setTagText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -278,6 +279,15 @@ export default function CandidateDetailPage() {
   const selectedFieldCount = useMemo(
     () => parseRun?.field_candidates.filter((item) => item.selected).length ?? 0,
     [parseRun],
+  );
+  const evidenceKeywords = useMemo(
+    () =>
+      [
+        activeEvidenceText,
+        ...(detail?.candidate.skills ?? []),
+        ...explanations.map((item) => item.evidence_text || ""),
+      ].filter((item): item is string => Boolean(item?.trim())),
+    [activeEvidenceText, detail?.candidate.skills, explanations],
   );
   const pendingDuplicateCount = detail?.duplicate_candidates.filter((item) => item.status === "pending_review").length ?? 0;
 
@@ -497,13 +507,20 @@ export default function CandidateDetailPage() {
               <Panel title="vNext 解析证据" icon={<FileSearch className="h-4 w-4" />}>
                 {parseRun ? (
                   <div className="space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <MiniMetric label="Parser" value={parseRun.parser_version} />
-                      <MiniMetric label="AI 增强" value={parseRun.ai_enabled ? "已开启" : "未开启"} />
-                      <MiniMetric label="质量分" value={formatPercent(parseRun.quality_score)} />
+                    <div className="grid gap-3 lg:grid-cols-[1.1fr_1fr]">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <MiniMetric label="Parser" value={parseRun.parser_version} />
+                        <MiniMetric label="AI 增强" value={parseRun.ai_enabled ? "已开启" : "未开启"} />
+                        <MiniMetric label="质量分" value={formatPercent(parseRun.quality_score)} />
+                      </div>
+                      <LowConfidenceSummary fields={detail.candidate.low_confidence_fields} />
                     </div>
-                    <FieldCandidateTable parseRun={parseRun} />
-                    <ParseBlocks blocks={parseRun.blocks} />
+                    <FieldCandidateTable
+                      parseRun={parseRun}
+                      lowConfidenceFields={detail.candidate.low_confidence_fields}
+                      onFocusEvidence={setActiveEvidenceText}
+                    />
+                    <ParseBlocks blocks={parseRun.blocks} onFocusEvidence={setActiveEvidenceText} />
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">暂无 vNext 解析运行记录。重新上传或重新解析后会生成。</p>
@@ -533,12 +550,21 @@ export default function CandidateDetailPage() {
                 ) : null}
               </Panel>
 
-              <Panel title="原简历预览" icon={<FileText className="h-4 w-4" />} actions={<span className="truncate text-xs text-muted-foreground">{detail.resume_file.file_name}</span>}>
+              <Panel
+                title="原简历预览"
+                icon={<FileText className="h-4 w-4" />}
+                actions={<span className="truncate text-xs text-muted-foreground">{detail.resume_file.file_name}</span>}
+              >
+                {activeEvidenceText ? (
+                  <div className="mb-3 flex flex-col gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="min-w-0 truncate">已高亮证据：{activeEvidenceText}</span>
+                    <button onClick={() => setActiveEvidenceText(null)} className="btn-secondary h-8 shrink-0 bg-white text-xs">
+                      清除高亮
+                    </button>
+                  </div>
+                ) : null}
                 <div className="max-h-[620px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-slate-50 p-4 text-sm leading-7">
-                  {renderHighlightedPreview(
-                    detail.preview.content,
-                    [...detail.candidate.skills, ...explanations.map((item) => item.evidence_text || "")].filter(Boolean),
-                  )}
+                  {renderHighlightedPreview(detail.preview.content, evidenceKeywords)}
                 </div>
               </Panel>
 
@@ -689,43 +715,168 @@ function InsightList({ title, items, tone }: { title: string; items: string[]; t
   );
 }
 
-function FieldCandidateTable({ parseRun }: { parseRun: ResumeParseRun }) {
-  const candidates = parseRun.field_candidates.slice(0, 10);
+
+function LowConfidenceSummary({ fields }: { fields: string[] }) {
+  return (
+    <div className="rounded-md border border-border bg-white px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold text-muted-foreground">低置信字段</p>
+        <span className={fields.length ? "text-xs font-semibold text-amber-700" : "text-xs font-semibold text-emerald-700"}>
+          {fields.length ? `${fields.length} 项待复核` : "无明显风险"}
+        </span>
+      </div>
+      {fields.length ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {fields.map((field) => (
+            <span key={field} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+              {fieldLabel(field)}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">核心字段解析置信度稳定。</p>
+      )}
+    </div>
+  );
+}
+
+function FieldCandidateTable({
+  parseRun,
+  lowConfidenceFields,
+  onFocusEvidence,
+}: {
+  parseRun: ResumeParseRun;
+  lowConfidenceFields: string[];
+  onFocusEvidence: (text: string) => void;
+}) {
+  const [filter, setFilter] = useState<"all" | "selected" | "review">("all");
+  const lowConfidenceSet = useMemo(() => new Set(lowConfidenceFields), [lowConfidenceFields]);
+  const sortedCandidates = useMemo(
+    () =>
+      [...parseRun.field_candidates].sort((a, b) => {
+        const riskDelta = Number(lowConfidenceSet.has(b.field_name)) - Number(lowConfidenceSet.has(a.field_name));
+        if (riskDelta) return riskDelta;
+        const selectedDelta = Number(b.selected) - Number(a.selected);
+        if (selectedDelta) return selectedDelta;
+        return (a.confidence ?? -1) - (b.confidence ?? -1);
+      }),
+    [lowConfidenceSet, parseRun.field_candidates],
+  );
+  const candidates = sortedCandidates.filter((item) => {
+    if (filter === "selected") return item.selected;
+    if (filter === "review") return !item.selected || lowConfidenceSet.has(item.field_name);
+    return true;
+  });
+  const selectedCount = parseRun.field_candidates.filter((item) => item.selected).length;
+  const reviewCount = parseRun.field_candidates.filter((item) => !item.selected || lowConfidenceSet.has(item.field_name)).length;
+
   return (
     <div className="overflow-hidden rounded-md border border-border">
-      <div className="grid grid-cols-[1fr_1fr_0.7fr_0.8fr] gap-3 bg-slate-50 px-3 py-2 text-xs font-semibold text-muted-foreground">
-        <span>字段</span>
-        <span>候选值</span>
-        <span>置信度</span>
-        <span>状态</span>
+      <div className="flex flex-col gap-3 border-b border-border bg-slate-50 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold">字段候选</p>
+          <p className="mt-1 text-xs text-muted-foreground">展示候选值、抽取器、置信度和原文证据。</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>全部 {parseRun.field_candidates.length}</FilterButton>
+          <FilterButton active={filter === "selected"} onClick={() => setFilter("selected")}>已选 {selectedCount}</FilterButton>
+          <FilterButton active={filter === "review"} onClick={() => setFilter("review")}>待复核 {reviewCount}</FilterButton>
+        </div>
       </div>
-      <div className="divide-y divide-border">
-        {candidates.map((item) => (
-          <div key={item.id} className="grid grid-cols-[1fr_1fr_0.7fr_0.8fr] gap-3 px-3 py-3 text-sm">
-            <span className="font-medium">{fieldLabel(item.field_name)}</span>
-            <span className="truncate text-muted-foreground" title={stringifyValue(item.value_json)}>{stringifyValue(item.value_json) || "-"}</span>
-            <span>{item.confidence === null ? "-" : Math.round(item.confidence * 100)}</span>
-            <span className={item.selected ? "text-emerald-700" : "text-amber-700"}>{item.selected ? "选中" : "待复核"}</span>
-          </div>
-        ))}
+      {candidates.length ? (
+        <div className="divide-y divide-border">
+          {candidates.map((item) => {
+            const isLowConfidence = lowConfidenceSet.has(item.field_name);
+            return (
+              <div key={item.id} className="grid gap-3 px-3 py-3 lg:grid-cols-[180px_minmax(0,1fr)_160px]">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">{fieldLabel(item.field_name)}</p>
+                    {isLowConfidence ? <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">低置信</span> : null}
+                    <span className={item.selected ? "rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700" : "rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600"}>
+                      {item.selected ? "已采用" : "未采用"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{item.extractor}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="line-clamp-2 text-sm leading-6 text-foreground" title={stringifyValue(item.value_json)}>
+                    {stringifyValue(item.value_json) || "-"}
+                  </p>
+                  {item.source_text ? (
+                    <div className="mt-2 rounded-md bg-slate-50 px-3 py-2">
+                      <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">{item.source_text}</p>
+                      <button onClick={() => onFocusEvidence(item.source_text || "")} className="mt-2 text-xs font-semibold text-primary hover:underline">
+                        高亮原文证据
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">暂无原文证据。</p>
+                  )}
+                  {item.rejection_reason ? <p className="mt-2 text-xs text-amber-700">未采用原因：{item.rejection_reason}</p> : null}
+                </div>
+                <ConfidenceCell confidence={item.confidence} />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="px-3 py-4 text-sm text-muted-foreground">当前筛选下暂无字段候选。</p>
+      )}
+    </div>
+  );
+}
+
+function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={active ? "rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white" : "rounded-md border border-border bg-white px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ConfidenceCell({ confidence }: { confidence: number | null }) {
+  const percent = confidence === null ? null : Math.round(confidence * 100);
+  const tone = confidence === null ? "bg-slate-200" : confidence >= 0.8 ? "bg-emerald-500" : confidence >= 0.6 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-muted-foreground">置信度</p>
+        <span className="text-sm font-semibold">{percent === null ? "-" : `${percent}%`}</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full rounded-full ${tone}`} style={{ width: `${percent ?? 0}%` }} />
       </div>
     </div>
   );
 }
 
-function ParseBlocks({ blocks }: { blocks: ResumeParseRun["blocks"] }) {
+function ParseBlocks({ blocks, onFocusEvidence }: { blocks: ResumeParseRun["blocks"]; onFocusEvidence: (text: string) => void }) {
   return (
     <div>
-      <p className="mb-2 text-sm font-semibold">段落识别</p>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">段落识别</p>
+        <span className="text-xs text-muted-foreground">{blocks.length} 个段落块</span>
+      </div>
       {blocks.length ? (
         <div className="grid gap-3 lg:grid-cols-2">
-          {blocks.slice(0, 6).map((block) => (
+          {blocks.slice(0, 8).map((block) => (
             <div key={block.id} className="rounded-md border border-border px-3 py-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold">{block.title || block.block_type}</p>
-                <span className="text-xs text-muted-foreground">{Math.round((block.confidence ?? 0) * 100)}%</span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{block.title || block.block_type}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{block.block_type}{block.inferred ? " / 推断段落" : ""}</p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{Math.round((block.confidence ?? 0) * 100)}%</span>
               </div>
               <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{block.text}</p>
+              <button onClick={() => onFocusEvidence(block.text)} className="mt-3 text-xs font-semibold text-primary hover:underline">
+                高亮该段原文
+              </button>
             </div>
           ))}
         </div>
