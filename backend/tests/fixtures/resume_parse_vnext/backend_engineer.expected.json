@@ -1,0 +1,27 @@
+{
+  "file_name": "后端开发-王小明.txt",
+  "name": "王小明",
+  "phone": "13800138009",
+  "email": "wang@example.com",
+  "city": "广州",
+  "skills_any": [
+    "Python",
+    "FastAPI",
+    "Docker"
+  ],
+  "education_count": 1,
+  "work_count": 1,
+  "project_count": 1,
+  "low_confidence_absent": [
+    "education",
+    "work_experiences",
+    "project_experiences"
+  ],
+  "required_candidate_extractors": [
+    "section:basics:rules",
+    "section:education:rules",
+    "section:work:rules",
+    "section:projects:rules",
+    "section:skills:rules"
+  ]
+}

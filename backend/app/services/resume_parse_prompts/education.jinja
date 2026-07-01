@@ -1,0 +1,18 @@
+你是教育经历结构化抽取器。
+
+教育经历段落：
+{{ section_text }}
+
+请返回 JSON 数组，每项结构：
+{
+  "school": string|null,
+  "degree": string|null,
+  "major": string|null,
+  "time_range": string|null,
+  "raw": string
+}
+
+规则：
+- degree 只允许使用原文中明确出现的博士、硕士、本科、大专、专科等学历。
+- 主修课程不能单独当作一条教育经历。
+- 学校简称不要自行扩写，除非规则层已经给出归一化结果。
