@@ -2,15 +2,18 @@
 
 import { useParams } from "next/navigation";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, RefreshCw, Save } from "lucide-react";
+import { CheckCircle2, FileSearch, Loader2, RefreshCw, Save } from "lucide-react";
 
 import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
   CandidateMatch,
   CandidateReviewData,
+  ResumeFieldCandidate,
+  ResumeParseRun,
   createCandidateMatch,
   getCandidateMatch,
   getCandidateReviewData,
+  getLatestResumeParseRun,
   updateCandidate,
 } from "@/lib/api";
 
@@ -36,6 +39,12 @@ type HighlightRange = {
   tone: "active" | "keyword" | "source";
 };
 
+type AppliedEvidence = {
+  value: string;
+  extractor: string;
+  confidence: number | null;
+};
+
 const fieldLabels: Record<keyof EditableForm, string> = {
   name: "姓名",
   phone: "手机号",
@@ -51,6 +60,25 @@ const fieldLabels: Record<keyof EditableForm, string> = {
   awards: "奖项荣誉",
   self_evaluation: "自我评价",
 };
+
+const singleLineFields: Array<keyof EditableForm> = [
+  "name",
+  "phone",
+  "email",
+  "city",
+  "current_company",
+  "current_title",
+  "years_of_experience",
+  "highest_education",
+];
+
+const multiLineFields: Array<keyof EditableForm> = [
+  "skills",
+  "certifications",
+  "languages",
+  "awards",
+  "self_evaluation",
+];
 
 function toForm(data: CandidateReviewData): EditableForm {
   const candidate = data.candidate;
@@ -76,11 +104,14 @@ export default function CandidateReviewPage() {
   const params = useParams<{ jobId: string; candidateId: string }>();
   const [data, setData] = useState<CandidateReviewData | null>(null);
   const [form, setForm] = useState<EditableForm | null>(null);
+  const [parseRun, setParseRun] = useState<ResumeParseRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [matching, setMatching] = useState(false);
   const [match, setMatch] = useState<CandidateMatch | null>(null);
-  const [activeField, setActiveField] = useState<string | null>(null);
+  const [activeField, setActiveField] = useState<keyof EditableForm | null>(null);
+  const [activeEvidenceText, setActiveEvidenceText] = useState<string | null>(null);
+  const [appliedEvidence, setAppliedEvidence] = useState<Partial<Record<keyof EditableForm, AppliedEvidence>>>({});
   const previewRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -92,6 +123,11 @@ export default function CandidateReviewPage() {
       const reviewData = await getCandidateReviewData(params.jobId, params.candidateId);
       setData(reviewData);
       setForm(toForm(reviewData));
+      try {
+        setParseRun(await getLatestResumeParseRun(reviewData.resume_file.id));
+      } catch {
+        setParseRun(null);
+      }
       try {
         setMatch(await getCandidateMatch(params.jobId, params.candidateId));
       } catch {
@@ -110,6 +146,24 @@ export default function CandidateReviewPage() {
 
   function setField(key: keyof EditableForm, value: string) {
     setForm((current) => (current ? { ...current, [key]: value } : current));
+  }
+
+  function applyCandidate(fieldName: keyof EditableForm, candidate: ResumeFieldCandidate) {
+    const value = candidateValueForForm(candidate.value_json);
+    setField(fieldName, value);
+    setAppliedEvidence((current) => ({
+      ...current,
+      [fieldName]: {
+        value,
+        extractor: candidate.extractor,
+        confidence: candidate.confidence,
+      },
+    }));
+    setActiveField(fieldName);
+    setActiveEvidenceText(candidate.source_text);
+    window.setTimeout(() => {
+      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -133,16 +187,13 @@ export default function CandidateReviewPage() {
         current_title: form.current_title || null,
         years_of_experience: years ? Number(years) : null,
         highest_education: form.highest_education || null,
-        skills: form.skills
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
+        skills: splitLines(form.skills),
         certifications: splitLines(form.certifications),
         languages: splitLines(form.languages),
         awards: splitLines(form.awards),
         self_evaluation: form.self_evaluation || null,
       });
-      setMessage("修正已保存");
+      setMessage("修正已保存；如使用了 vNext 候选，来源已在本页保留用于复核。");
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -165,12 +216,19 @@ export default function CandidateReviewPage() {
     }
   }
 
-  function locateField(fieldName: keyof EditableForm) {
+  function locateField(fieldName: keyof EditableForm, sourceText?: string | null) {
     setActiveField(fieldName);
+    setActiveEvidenceText(sourceText || null);
     window.setTimeout(() => {
       previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 0);
   }
+
+  const candidatesByField = useMemo(() => groupFieldCandidates(parseRun), [parseRun]);
+  const lowConfidenceFields = useMemo(
+    () => new Set(data?.candidate.low_confidence_fields ?? []),
+    [data?.candidate.low_confidence_fields],
+  );
 
   const highlightRanges = useMemo(() => {
     if (!data) return [];
@@ -184,13 +242,18 @@ export default function CandidateReviewPage() {
         tone: extraction.field_name === activeField ? "active" : "source",
       });
     }
+    if (activeEvidenceText) {
+      for (const range of findAllRanges(content, activeEvidenceText)) {
+        ranges.push({ ...range, tone: "active" });
+      }
+    }
     for (const skill of data.candidate.skills) {
       for (const range of findAllRanges(content, skill)) {
         ranges.push({ ...range, tone: "keyword" });
       }
     }
     return ranges;
-  }, [activeField, data]);
+  }, [activeEvidenceText, activeField, data]);
 
   return (
     <WorkspaceShell
@@ -220,67 +283,53 @@ export default function CandidateReviewPage() {
           正在加载修正数据
         </div>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
-          <form id="candidate-review-form" onSubmit={handleSubmit} className="panel p-5">
-            <div className="border-b border-border pb-4">
-              <h2 className="text-base font-semibold">结构化字段</h2>
-              <p className="mt-1 text-sm text-muted-foreground">关键字段会影响候选人列表和匹配评分。</p>
+        <div className="grid gap-5 xl:grid-cols-[minmax(460px,560px)_minmax(0,1fr)]">
+          <form id="candidate-review-form" onSubmit={handleSubmit} className="panel overflow-hidden">
+            <div className="border-b border-border bg-slate-50/80 px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold">结构化字段</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">低置信字段优先显示 vNext 候选证据。</p>
+                </div>
+                <ParseRunBadge parseRun={parseRun} />
+              </div>
             </div>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-              <Field label="姓名" value={form.name} onChange={(v) => setField("name", v)} onLocate={() => locateField("name")} />
-              <Field label="手机号" value={form.phone} onChange={(v) => setField("phone", v)} onLocate={() => locateField("phone")} />
-              <Field label="邮箱" value={form.email} onChange={(v) => setField("email", v)} onLocate={() => locateField("email")} />
-              <Field label="城市" value={form.city} onChange={(v) => setField("city", v)} onLocate={() => locateField("city")} />
-              <Field label="当前公司" value={form.current_company} onChange={(v) => setField("current_company", v)} onLocate={() => locateField("current_company")} />
-              <Field label="当前岗位" value={form.current_title} onChange={(v) => setField("current_title", v)} onLocate={() => locateField("current_title")} />
-              <Field label="工作年限" value={form.years_of_experience} onChange={(v) => setField("years_of_experience", v)} onLocate={() => locateField("years_of_experience")} />
-              <Field label="最高学历" value={form.highest_education} onChange={(v) => setField("highest_education", v)} onLocate={() => locateField("highest_education")} />
+            <div className="divide-y divide-border">
+              {orderFieldsByConfidence(singleLineFields, lowConfidenceFields).map((fieldName) => (
+                <ReviewFieldRow
+                  key={fieldName}
+                  fieldName={fieldName}
+                  value={form[fieldName]}
+                  multiline={false}
+                  candidates={candidatesByField[fieldName] ?? []}
+                  lowConfidence={lowConfidenceFields.has(fieldName)}
+                  appliedEvidence={appliedEvidence[fieldName]}
+                  onChange={(value) => setField(fieldName, value)}
+                  onLocate={(sourceText) => locateField(fieldName, sourceText)}
+                  onApply={(candidate) => applyCandidate(fieldName, candidate)}
+                />
+              ))}
+              {orderFieldsByConfidence(multiLineFields, lowConfidenceFields).map((fieldName) => (
+                <ReviewFieldRow
+                  key={fieldName}
+                  fieldName={fieldName}
+                  value={form[fieldName]}
+                  multiline
+                  candidates={candidatesByField[fieldName] ?? []}
+                  lowConfidence={lowConfidenceFields.has(fieldName)}
+                  appliedEvidence={appliedEvidence[fieldName]}
+                  onChange={(value) => setField(fieldName, value)}
+                  onLocate={(sourceText) => locateField(fieldName, sourceText)}
+                  onApply={(candidate) => applyCandidate(fieldName, candidate)}
+                />
+              ))}
             </div>
 
-            <label className="mt-4 block">
-              <span className="flex items-center justify-between gap-3 text-sm font-medium">
-                技能关键词
-                <button type="button" onClick={() => locateField("skills")} className="text-xs font-semibold text-primary">
-                  定位
-                </button>
-              </span>
-              <textarea
-                className="input mt-2 min-h-28 resize-y"
-                value={form.skills}
-                onChange={(event) => setField("skills", event.target.value)}
-              />
-            </label>
-
-            <MultiLineField
-              label="证书"
-              value={form.certifications}
-              onChange={(v) => setField("certifications", v)}
-              onLocate={() => locateField("certifications")}
-            />
-            <MultiLineField
-              label="语言能力"
-              value={form.languages}
-              onChange={(v) => setField("languages", v)}
-              onLocate={() => locateField("languages")}
-            />
-            <MultiLineField
-              label="奖项荣誉"
-              value={form.awards}
-              onChange={(v) => setField("awards", v)}
-              onLocate={() => locateField("awards")}
-            />
-            <MultiLineField
-              label="自我评价"
-              value={form.self_evaluation}
-              onChange={(v) => setField("self_evaluation", v)}
-              onLocate={() => locateField("self_evaluation")}
-            />
-
-            <div className="mt-5 rounded-md bg-muted p-4">
+            <div className="m-5 rounded-md bg-muted p-4">
               <h3 className="text-sm font-semibold">待确认字段</h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 {data.candidate.low_confidence_fields.length
-                  ? data.candidate.low_confidence_fields.join("、")
+                  ? data.candidate.low_confidence_fields.map((field) => fieldLabels[field as keyof EditableForm] ?? field).join("、")
                   : "暂无"}
               </p>
             </div>
@@ -314,9 +363,10 @@ export default function CandidateReviewPage() {
                 </span>
               </div>
               {activeField ? (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  当前定位：{fieldLabels[activeField as keyof EditableForm] ?? activeField}
-                </p>
+                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  当前定位：{fieldLabels[activeField]}
+                  {activeEvidenceText ? <span className="ml-2">已高亮 vNext 证据</span> : null}
+                </div>
               ) : null}
               <div
                 ref={previewRef}
@@ -347,51 +397,128 @@ export default function CandidateReviewPage() {
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  onLocate,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  onLocate: () => void;
-}) {
+function ParseRunBadge({ parseRun }: { parseRun: ResumeParseRun | null }) {
+  if (!parseRun) {
+    return <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">无 vNext 证据</span>;
+  }
   return (
-    <label className="block">
-      <span className="flex items-center justify-between gap-3 text-sm font-medium">
-        {label}
-        <button type="button" onClick={onLocate} className="text-xs font-semibold text-primary">
-          定位
-        </button>
-      </span>
-      <input className="input mt-2" value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
+    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+      <FileSearch className="h-3.5 w-3.5" />
+      vNext {Math.round(parseRun.quality_score ?? 0)}%
+    </span>
   );
 }
 
-function MultiLineField({
-  label,
+function ReviewFieldRow({
+  fieldName,
   value,
+  multiline,
+  candidates,
+  lowConfidence,
+  appliedEvidence,
   onChange,
   onLocate,
+  onApply,
 }: {
-  label: string;
+  fieldName: keyof EditableForm;
   value: string;
+  multiline: boolean;
+  candidates: ResumeFieldCandidate[];
+  lowConfidence: boolean;
+  appliedEvidence?: AppliedEvidence;
   onChange: (value: string) => void;
-  onLocate: () => void;
+  onLocate: (sourceText?: string | null) => void;
+  onApply: (candidate: ResumeFieldCandidate) => void;
 }) {
+  const sortedCandidates = sortFieldCandidates(candidates);
   return (
-    <label className="mt-4 block">
-      <span className="flex items-center justify-between gap-3 text-sm font-medium">
-        {label}
-        <button type="button" onClick={onLocate} className="text-xs font-semibold text-primary">
+    <div className={lowConfidence ? "bg-amber-50/50 px-5 py-4" : "px-5 py-4"}>
+      <div className="flex items-start justify-between gap-3">
+        <label className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+            {fieldLabels[fieldName]}
+            {lowConfidence ? <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">低置信</span> : null}
+            {appliedEvidence ? (
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                <CheckCircle2 className="h-3 w-3" />
+                来自 vNext 候选
+              </span>
+            ) : null}
+          </span>
+          {multiline ? (
+            <textarea
+              className="input mt-2 min-h-24 resize-y"
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+            />
+          ) : (
+            <input className="input mt-2" value={value} onChange={(event) => onChange(event.target.value)} />
+          )}
+        </label>
+        <button type="button" onClick={() => onLocate()} className="mt-7 text-xs font-semibold text-primary">
           定位
         </button>
-      </span>
-      <textarea className="input mt-2 min-h-24 resize-y" value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
+      </div>
+      {appliedEvidence ? (
+        <p className="mt-2 text-xs text-emerald-700">
+          已套用：{appliedEvidence.extractor} / 置信度 {formatConfidence(appliedEvidence.confidence)}
+        </p>
+      ) : null}
+      <FieldCandidateList candidates={sortedCandidates} onLocate={onLocate} onApply={onApply} />
+    </div>
+  );
+}
+
+function FieldCandidateList({
+  candidates,
+  onLocate,
+  onApply,
+}: {
+  candidates: ResumeFieldCandidate[];
+  onLocate: (sourceText?: string | null) => void;
+  onApply: (candidate: ResumeFieldCandidate) => void;
+}) {
+  if (!candidates.length) {
+    return <p className="mt-2 text-xs text-muted-foreground">暂无 vNext 候选，保留旧字段修正体验。</p>;
+  }
+  return (
+    <div className="mt-3 space-y-2">
+      {candidates.slice(0, 4).map((candidate) => (
+        <div key={candidate.id} className="rounded-md border border-border bg-white px-3 py-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onApply(candidate)}
+                  className="line-clamp-2 text-left text-sm font-medium text-primary hover:underline"
+                >
+                  {candidateValueForDisplay(candidate.value_json) || "空值"}
+                </button>
+                <span className={candidate.selected ? "rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700" : "rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600"}>
+                  {candidate.selected ? "已采用" : "未采用"}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {candidate.extractor} / 置信度 {formatConfidence(candidate.confidence)}
+              </p>
+            </div>
+            <button type="button" onClick={() => onApply(candidate)} className="btn-secondary h-8 shrink-0 text-xs">
+              套用
+            </button>
+          </div>
+          {candidate.source_text ? (
+            <div className="mt-2 rounded-md bg-slate-50 px-2 py-2">
+              <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">{candidate.source_text}</p>
+              <button type="button" onClick={() => onLocate(candidate.source_text)} className="mt-1 text-xs font-semibold text-primary">
+                定位证据
+              </button>
+            </div>
+          ) : null}
+          {candidate.rejection_reason ? <p className="mt-2 text-xs text-amber-700">原因：{candidate.rejection_reason}</p> : null}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -400,6 +527,54 @@ function splitLines(value: string) {
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function groupFieldCandidates(parseRun: ResumeParseRun | null): Partial<Record<keyof EditableForm, ResumeFieldCandidate[]>> {
+  if (!parseRun) return {};
+  const groups: Partial<Record<keyof EditableForm, ResumeFieldCandidate[]>> = {};
+  for (const candidate of parseRun.field_candidates) {
+    if (!isEditableField(candidate.field_name)) continue;
+    groups[candidate.field_name] = [...(groups[candidate.field_name] ?? []), candidate];
+  }
+  return groups;
+}
+
+function isEditableField(fieldName: string): fieldName is keyof EditableForm {
+  return fieldName in fieldLabels;
+}
+
+function sortFieldCandidates(candidates: ResumeFieldCandidate[]) {
+  return [...candidates].sort((a, b) => {
+    const selectedDelta = Number(b.selected) - Number(a.selected);
+    if (selectedDelta) return selectedDelta;
+    return (b.confidence ?? -1) - (a.confidence ?? -1);
+  });
+}
+
+function orderFieldsByConfidence<T extends keyof EditableForm>(fields: T[], lowConfidenceFields: Set<string>) {
+  return [...fields].sort((a, b) => Number(lowConfidenceFields.has(b)) - Number(lowConfidenceFields.has(a)));
+}
+
+function candidateValueForForm(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map((item) => candidateValueForForm(item)).filter(Boolean).join("\n");
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = ["raw", "name", "company", "school", "title", "degree", "description"];
+    const parts = preferred.map((key) => record[key]).filter((item) => typeof item === "string" && item.trim()).map(String);
+    return parts.length ? parts.join(" / ") : JSON.stringify(value);
+  }
+  return "";
+}
+
+function candidateValueForDisplay(value: unknown): string {
+  const text = candidateValueForForm(value);
+  return text.replace(/\n+/g, "、");
+}
+
+function formatConfidence(value: number | null | undefined) {
+  return value === null || value === undefined ? "-" : `${Math.round(value * 100)}%`;
 }
 
 function resolveExtractionRange(
