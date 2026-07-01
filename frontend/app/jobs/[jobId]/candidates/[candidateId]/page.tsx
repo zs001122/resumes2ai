@@ -2,9 +2,30 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, Clipboard, Download, FileText, Loader2, PencilLine, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  BadgeCheck,
+  BriefcaseBusiness,
+  CheckCircle2,
+  Clipboard,
+  Download,
+  FileSearch,
+  FileText,
+  History,
+  Loader2,
+  Mail,
+  MapPin,
+  PencilLine,
+  Phone,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  Tag,
+  UserRound,
+} from "lucide-react";
 
 import { Notice, WorkspaceShell } from "@/components/WorkspaceShell";
 import {
@@ -16,6 +37,7 @@ import {
   CandidateRecommendationReport,
   CandidateTag,
   CandidateTimelineEvent,
+  ResumeParseRun,
   addCandidateTag,
   addCandidateToTalentPool,
   createCandidateMatch,
@@ -23,6 +45,7 @@ import {
   getCandidateDetail,
   getCandidateMatchExplanations,
   getCandidateRecommendationReport,
+  getLatestResumeParseRun,
   listCandidateJobHistory,
   listCandidateNotes,
   listCandidateTags,
@@ -41,11 +64,17 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatPercent(value: number | null | undefined) {
+  if (value === null || value === undefined) return "-";
+  return `${Math.round(value)}%`;
+}
+
 export default function CandidateDetailPage() {
   const params = useParams<{ jobId: string; candidateId: string }>();
   const [detail, setDetail] = useState<CandidateDetail | null>(null);
   const [match, setMatch] = useState<CandidateMatch | null>(null);
   const [explanations, setExplanations] = useState<CandidateMatchExplanation[]>([]);
+  const [parseRun, setParseRun] = useState<ResumeParseRun | null>(null);
   const [notes, setNotes] = useState<CandidateNote[]>([]);
   const [timeline, setTimeline] = useState<CandidateTimelineEvent[]>([]);
   const [report, setReport] = useState<CandidateRecommendationReport | null>(null);
@@ -71,10 +100,16 @@ export default function CandidateDetailPage() {
       const data = await getCandidateDetail(params.jobId, params.candidateId);
       setDetail(data);
       setMatch(data.match);
+      setParseRun(null);
       if (data.match) {
         setExplanations(await getCandidateMatchExplanations(params.jobId, params.candidateId));
       } else {
         setExplanations([]);
+      }
+      try {
+        setParseRun(await getLatestResumeParseRun(data.resume_file.id));
+      } catch {
+        setParseRun(null);
       }
       setNotes(await listCandidateNotes(params.jobId, params.candidateId));
       setTimeline(await listCandidateTimeline(params.jobId, params.candidateId));
@@ -240,6 +275,12 @@ export default function CandidateDetailPage() {
     void loadDetail();
   }, [params.jobId, params.candidateId]);
 
+  const selectedFieldCount = useMemo(
+    () => parseRun?.field_candidates.filter((item) => item.selected).length ?? 0,
+    [parseRun],
+  );
+  const pendingDuplicateCount = detail?.duplicate_candidates.filter((item) => item.status === "pending_review").length ?? 0;
+
   return (
     <WorkspaceShell
       title={detail?.candidate.name || "候选人详情"}
@@ -251,10 +292,16 @@ export default function CandidateDetailPage() {
       backHref={`/jobs/${params.jobId}/candidates`}
       backLabel="返回候选人列表"
       actions={
-        <Link href={`/jobs/${params.jobId}/candidates/${params.candidateId}/review`} className="btn-primary">
-          <PencilLine className="h-4 w-4" />
-          修正解析结果
-        </Link>
+        <>
+          <button onClick={() => void loadDetail()} className="btn-secondary">
+            <RefreshCw className="h-4 w-4" />
+            刷新
+          </button>
+          <Link href={`/jobs/${params.jobId}/candidates/${params.candidateId}/review`} className="btn-primary">
+            <PencilLine className="h-4 w-4" />
+            修正解析结果
+          </Link>
+        </>
       }
     >
       {error ? (
@@ -276,289 +323,459 @@ export default function CandidateDetailPage() {
           正在加载候选人详情
         </div>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="space-y-5">
-            <Panel title="AI 匹配分析">
-              {match ? (
-                <>
-                  <div className="flex items-end justify-between gap-4">
-                    <div>
-                      <p className="text-4xl font-semibold">{match.score}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">{match.level}</p>
+        <div className="space-y-5">
+          <section className="panel overflow-hidden">
+            <div className="grid gap-0 xl:grid-cols-[1fr_320px]">
+              <div className="p-5 sm:p-6">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-slate-900 text-sm font-semibold text-white">
+                        {(detail.candidate.name || "候").slice(0, 1)}
+                      </span>
+                      <div>
+                        <h2 className="text-xl font-semibold text-foreground">{detail.candidate.name || "姓名待确认"}</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {detail.candidate.current_title || "岗位待确认"} · {detail.candidate.current_company || "公司待确认"}
+                        </p>
+                      </div>
                     </div>
-                    <button onClick={() => void handleRematch()} disabled={matching} className="btn-secondary h-9 text-xs">
+                    <div className="mt-5 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
+                      <Signal icon={Phone} label="电话" value={detail.candidate.phone || "待确认"} />
+                      <Signal icon={Mail} label="邮箱" value={detail.candidate.email || "待确认"} />
+                      <Signal icon={MapPin} label="城市" value={detail.candidate.city || "待确认"} />
+                      <Signal
+                        icon={BriefcaseBusiness}
+                        label="年限 / 学历"
+                        value={`${detail.candidate.years_of_experience ?? "-"} 年 / ${detail.candidate.highest_education || "-"}`}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 lg:w-[360px]">
+                    <DecisionMetric label="匹配分" value={match ? String(Math.round(match.score)) : "-"} tone={scoreTone(match?.score)} />
+                    <DecisionMetric label="低置信" value={String(detail.candidate.low_confidence_fields.length)} tone={detail.candidate.low_confidence_fields.length ? "warning" : "success"} />
+                    <DecisionMetric label="重复待复核" value={String(pendingDuplicateCount)} tone={pendingDuplicateCount ? "warning" : "default"} />
+                  </div>
+                </div>
+              </div>
+              <div className="border-t border-border bg-slate-50 p-5 xl:border-l xl:border-t-0">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground">解析质量</p>
+                    <p className="mt-1 text-2xl font-semibold">{formatPercent(parseRun?.quality_score)}</p>
+                  </div>
+                  <FileSearch className="h-8 w-8 text-slate-400" />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <MiniMetric label="字段候选" value={parseRun ? `${selectedFieldCount}/${parseRun.field_candidates.length}` : "-"} />
+                  <MiniMetric label="段落块" value={String(parseRun?.blocks.length ?? "-")} />
+                </div>
+                {parseRun?.warnings.length ? (
+                  <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                    {parseRun.warnings[0]}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+            <aside className="space-y-5 xl:sticky xl:top-5 xl:self-start">
+              <Panel title="匹配决策" icon={<Sparkles className="h-4 w-4" />}>
+                {match ? (
+                  <div className="space-y-4">
+                    <div className="flex items-end justify-between gap-4">
+                      <div>
+                        <p className="text-4xl font-semibold leading-none">{Math.round(match.score)}</p>
+                        <p className="mt-2 text-sm font-medium text-muted-foreground">{match.level}</p>
+                      </div>
+                      <button onClick={() => void handleRematch()} disabled={matching} className="btn-secondary h-9 text-xs">
+                        {matching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        重评
+                      </button>
+                    </div>
+                    <p className="text-sm leading-6 text-muted-foreground">{match.summary}</p>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    <p>暂无匹配结果。</p>
+                    <button onClick={() => void handleRematch()} disabled={matching} className="btn-secondary mt-3 h-9 text-xs">
                       {matching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                      重评
+                      立即评分
                     </button>
                   </div>
-                  <p className="mt-4 text-sm leading-6 text-muted-foreground">{match.summary}</p>
-                </>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  <p>暂无匹配结果。</p>
-                  <button onClick={() => void handleRematch()} disabled={matching} className="btn-secondary mt-3 h-9 text-xs">
-                    {matching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    立即评分
+                )}
+              </Panel>
+
+              <Panel title="人才库与标签" icon={<Archive className="h-4 w-4" />}>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => void handleAddToTalentPool()} disabled={savingTalentPool} className="btn-primary h-9 text-xs">
+                    {savingTalentPool ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    加入人才库
+                  </button>
+                  <button onClick={() => void handleRemoveFromTalentPool()} disabled={savingTalentPool} className="btn-secondary h-9 text-xs">
+                    移出人才库
                   </button>
                 </div>
-              )}
-            </Panel>
-
-            <Panel title="结构化信息">
-              <Info label="邮箱" value={detail.candidate.email} />
-              <Info label="当前公司" value={detail.candidate.current_company} />
-              <Info label="工作年限" value={detail.candidate.years_of_experience?.toString()} />
-              <Info label="最高学历" value={detail.candidate.highest_education} />
-              <TagList title="技能" items={detail.candidate.skills} />
-              <TagList title="证书" items={detail.candidate.certifications} />
-              <TagList title="语言" items={detail.candidate.languages} />
-            </Panel>
-
-            <Panel title="重复识别">
-              {detail.duplicate_candidates.length ? (
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-800">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p>疑似重复，仅供 HR 复核，不自动合并。</p>
-                  </div>
-                  {detail.duplicate_candidates.map((item) => (
-                    <div key={item.id} className="rounded-md border border-border px-3 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-semibold">{item.matched_candidate?.name || "姓名待确认"}</p>
-                        <DuplicateReviewStatus status={item.status} />
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {item.match_reason} / 置信度 {Math.round(item.confidence * 100)}%
-                      </p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {item.matched_candidate?.phone || item.matched_candidate?.email || "联系方式待确认"}
-                      </p>
-                      {item.review_note ? (
-                        <p className="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{item.review_note}</p>
-                      ) : null}
-                      {item.status === "pending_review" ? (
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <button
-                            onClick={() => void handleReviewDuplicate(item.id, "ignored")}
-                            disabled={reviewingDuplicateId === item.id}
-                            className="btn-secondary h-9 text-xs"
-                          >
-                            {reviewingDuplicateId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                            忽略风险
-                          </button>
-                          <button
-                            onClick={() => void handleReviewDuplicate(item.id, "confirmed_duplicate")}
-                            disabled={reviewingDuplicateId === item.id}
-                            className="btn-primary h-9 text-xs"
-                          >
-                            {reviewingDuplicateId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                            确认重复
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
+                <div className="mt-4 flex gap-2">
+                  <input className="input h-9 py-1 text-sm" placeholder="新增标签" value={tagText} onChange={(event) => setTagText(event.target.value)} />
+                  <button onClick={() => void handleAddTag()} disabled={savingTag || !tagText.trim()} className="btn-secondary h-9 text-xs">
+                    添加
+                  </button>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">暂无疑似重复记录。</p>
-              )}
-            </Panel>
-
-            <Panel title="人才库">
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => void handleAddToTalentPool()} disabled={savingTalentPool} className="btn-primary">
-                  {savingTalentPool ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  加入人才库
-                </button>
-                <button onClick={() => void handleRemoveFromTalentPool()} disabled={savingTalentPool} className="btn-secondary">
-                  移出人才库
-                </button>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <input className="input" placeholder="新增标签" value={tagText} onChange={(event) => setTagText(event.target.value)} />
-                <button onClick={() => void handleAddTag()} disabled={savingTag || !tagText.trim()} className="btn-secondary">
-                  添加
-                </button>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {tags.length ? (
-                  tags.map((tag) => (
-                    <button
-                      key={tag.id}
-                      onClick={() => void handleRemoveTag(tag.id)}
-                      className="status-pill"
-                      title="点击移除标签"
-                    >
-                      {tag.name}
-                    </button>
-                  ))
-                ) : (
-                  <span className="text-sm text-muted-foreground">暂无标签</span>
-                )}
-              </div>
-            </Panel>
-
-            <Panel title="候选人备注">
-              <textarea
-                className="input min-h-28 resize-y"
-                placeholder="记录电话沟通、用人部门反馈或后续跟进事项"
-                value={noteText}
-                onChange={(event) => setNoteText(event.target.value)}
-              />
-              <button onClick={() => void handleCreateNote()} disabled={savingNote || !noteText.trim()} className="btn-primary mt-3 w-full">
-                {savingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                保存备注
-              </button>
-              {notes.length ? (
-                <div className="mt-4 space-y-3">
-                  {notes.map((note) => (
-                    <div key={note.id} className="rounded-md bg-muted px-3 py-3">
-                      <p className="text-sm leading-6">{note.content}</p>
-                      <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(note.created_at)}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-4 text-sm text-muted-foreground">暂无备注。</p>
-              )}
-            </Panel>
-          </aside>
-
-          <section className="space-y-5">
-            {match ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                <Panel title="分项解释">
-                  {explanations.length ? (
-                    <div className="space-y-3">
-                      {explanations.map((item) => (
-                        <div key={item.id} className="rounded-md bg-muted px-3 py-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold">{item.dimension}</p>
-                            <span className="text-sm font-semibold">{item.score ?? "-"}</span>
-                          </div>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.conclusion}</p>
-                          {item.evidence_text ? (
-                            <p className="mt-2 rounded-md bg-background px-3 py-2 text-xs leading-5 text-muted-foreground">
-                              {item.evidence_text}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {tags.length ? (
+                    tags.map((tag) => (
+                      <button key={tag.id} onClick={() => void handleRemoveTag(tag.id)} className="status-pill" title="点击移除标签">
+                        <Tag className="mr-1 h-3 w-3" />
+                        {tag.name}
+                      </button>
+                    ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">暂无分项解释。</p>
+                    <span className="text-sm text-muted-foreground">暂无标签</span>
                   )}
-                </Panel>
-                <List title="匹配点" items={match.matched_points} />
-                <List title="短板" items={match.weak_points} />
-                <List title="风险点" items={match.risks} />
-                <List title="面试问题" items={match.interview_questions} />
-              </div>
-            ) : null}
+                </div>
+              </Panel>
 
-            <Panel title="推荐摘要">
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => void handleGenerateReport()} disabled={generatingReport || !match} className="btn-primary">
-                  {generatingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                  生成推荐摘要
-                </button>
-                <button onClick={() => void handleCopyReport()} disabled={copyingReport || !reportText.trim()} className="btn-secondary">
-                  {copyingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clipboard className="h-4 w-4" />}
-                  复制 Markdown
-                </button>
-                <button onClick={handleDownloadReport} disabled={!reportText.trim()} className="btn-secondary">
-                  <Download className="h-4 w-4" />
-                  下载 .md
-                </button>
-              </div>
-              {!match ? (
-                <p className="mt-3 text-sm text-muted-foreground">请先生成匹配评分，再生成推荐摘要。</p>
-              ) : null}
-              {report ? (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  已生成 Markdown 草稿，可在导出前人工调整。
-                </p>
-              ) : null}
-              <textarea
-                className="input mt-4 min-h-96 resize-y font-mono text-sm leading-6"
-                placeholder="生成后可在这里编辑推荐摘要"
-                value={reportText}
-                onChange={(event) => setReportText(event.target.value)}
-              />
-            </Panel>
+              <Panel title="重复风险" icon={<ShieldAlert className="h-4 w-4" />}>
+                <DuplicateReviewList
+                  items={detail.duplicate_candidates}
+                  reviewingDuplicateId={reviewingDuplicateId}
+                  onReview={(id, status) => void handleReviewDuplicate(id, status)}
+                />
+              </Panel>
 
-            <Panel title="原简历预览">
-              <p className="mb-3 text-sm text-muted-foreground">{detail.resume_file.file_name}</p>
-              <div className="max-h-[720px] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-sm leading-7">
-                {renderHighlightedPreview(
-                  detail.preview.content,
-                  [...detail.candidate.skills, ...explanations.map((item) => item.evidence_text || "")].filter(Boolean),
+              <Panel title="备注" icon={<Clipboard className="h-4 w-4" />}>
+                <textarea
+                  className="input min-h-24 resize-y text-sm"
+                  placeholder="记录电话沟通、用人部门反馈或后续跟进事项"
+                  value={noteText}
+                  onChange={(event) => setNoteText(event.target.value)}
+                />
+                <button onClick={() => void handleCreateNote()} disabled={savingNote || !noteText.trim()} className="btn-primary mt-3 h-9 w-full text-xs">
+                  {savingNote ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  保存备注
+                </button>
+                <div className="mt-4 space-y-3">
+                  {notes.slice(0, 3).map((note) => (
+                    <div key={note.id} className="border-l-2 border-slate-200 pl-3">
+                      <p className="text-sm leading-6">{note.content}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(note.created_at)}</p>
+                    </div>
+                  ))}
+                  {!notes.length ? <p className="text-sm text-muted-foreground">暂无备注。</p> : null}
+                </div>
+              </Panel>
+            </aside>
+
+            <section className="space-y-5">
+              <Panel title="分项解释" icon={<BadgeCheck className="h-4 w-4" />} actions={<span className="text-xs text-muted-foreground">{explanations.length} 项</span>}>
+                {match ? (
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {explanations.length ? (
+                      explanations.map((item) => (
+                        <EvidenceRow key={item.id} title={item.dimension} score={item.score} body={item.conclusion} evidence={item.evidence_text} />
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">暂无分项解释。</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">生成匹配评分后会展示分项解释。</p>
                 )}
-              </div>
-            </Panel>
+              </Panel>
 
-            <Panel title="结构化经历">
-              <StructuredItems title="教育经历" items={detail.candidate.education} />
-              <StructuredItems title="工作经历" items={detail.candidate.work_experiences} />
-              <StructuredItems title="项目经历" items={detail.candidate.project_experiences} />
-              <InlineList title="奖项荣誉" items={detail.candidate.awards} />
-              {detail.candidate.self_evaluation ? (
-                <div className="mt-4">
-                  <p className="text-sm font-semibold">自我评价</p>
-                  <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted px-3 py-3 text-sm leading-6 text-muted-foreground">
-                    {detail.candidate.self_evaluation}
-                  </p>
+              {match ? (
+                <div className="grid gap-5 lg:grid-cols-2">
+                  <InsightList title="匹配点" items={match.matched_points} tone="success" />
+                  <InsightList title="短板" items={match.weak_points} tone="warning" />
+                  <InsightList title="风险点" items={match.risks} tone="danger" />
+                  <InsightList title="面试问题" items={match.interview_questions} tone="default" />
                 </div>
               ) : null}
-            </Panel>
 
-            <Panel title="操作时间线">
-              {timeline.length ? (
-                <div className="space-y-3">
-                  {timeline.map((event) => (
-                    <div key={event.id} className="rounded-md border border-border px-3 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold">{event.action_summary}</p>
-                        <time className="text-xs text-muted-foreground">{formatDateTime(event.created_at)}</time>
-                      </div>
-                      {event.after_value || event.before_value ? (
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          {event.after_value || event.before_value}
-                        </p>
-                      ) : null}
+              <Panel title="vNext 解析证据" icon={<FileSearch className="h-4 w-4" />}>
+                {parseRun ? (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <MiniMetric label="Parser" value={parseRun.parser_version} />
+                      <MiniMetric label="AI 增强" value={parseRun.ai_enabled ? "已开启" : "未开启"} />
+                      <MiniMetric label="质量分" value={formatPercent(parseRun.quality_score)} />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">暂无时间线记录。</p>
-              )}
-            </Panel>
+                    <FieldCandidateTable parseRun={parseRun} />
+                    <ParseBlocks blocks={parseRun.blocks} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">暂无 vNext 解析运行记录。重新上传或重新解析后会生成。</p>
+                )}
+              </Panel>
 
-            <Panel title="历史岗位">
-              {jobHistory.length ? (
-                <div className="space-y-3">
-                  {jobHistory.map((item) => (
-                    <div key={item.job_id} className="rounded-md border border-border px-3 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <Link href={`/jobs/${item.job_id}`} className="text-sm font-semibold text-primary">
-                          {item.job_title}
-                        </Link>
-                        <span className="status-pill">{item.candidate_status}</span>
-                      </div>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        岗位状态：{item.job_status} / 更新于 {formatDateTime(item.updated_at)}
-                      </p>
-                    </div>
-                  ))}
+              <Panel title="结构化简历" icon={<UserRound className="h-4 w-4" />}>
+                <div className="grid gap-5 lg:grid-cols-2">
+                  <ProfileFacts detail={detail} />
+                  <div>
+                    <TagList title="技能" items={detail.candidate.skills} />
+                    <TagList title="证书" items={detail.candidate.certifications} />
+                    <TagList title="语言" items={detail.candidate.languages} />
+                    <InlineList title="奖项荣誉" items={detail.candidate.awards} />
+                  </div>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">暂无历史岗位。</p>
-              )}
-            </Panel>
-          </section>
+                <div className="mt-5 grid gap-5 lg:grid-cols-3">
+                  <StructuredItems title="教育经历" items={detail.candidate.education} />
+                  <StructuredItems title="工作经历" items={detail.candidate.work_experiences} />
+                  <StructuredItems title="项目经历" items={detail.candidate.project_experiences} />
+                </div>
+                {detail.candidate.self_evaluation ? (
+                  <div className="mt-5 border-t border-border pt-4">
+                    <p className="text-sm font-semibold">自我评价</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{detail.candidate.self_evaluation}</p>
+                  </div>
+                ) : null}
+              </Panel>
+
+              <Panel title="原简历预览" icon={<FileText className="h-4 w-4" />} actions={<span className="truncate text-xs text-muted-foreground">{detail.resume_file.file_name}</span>}>
+                <div className="max-h-[620px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-slate-50 p-4 text-sm leading-7">
+                  {renderHighlightedPreview(
+                    detail.preview.content,
+                    [...detail.candidate.skills, ...explanations.map((item) => item.evidence_text || "")].filter(Boolean),
+                  )}
+                </div>
+              </Panel>
+
+              <Panel title="推荐摘要" icon={<FileText className="h-4 w-4" />}>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => void handleGenerateReport()} disabled={generatingReport || !match} className="btn-primary">
+                    {generatingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    生成推荐摘要
+                  </button>
+                  <button onClick={() => void handleCopyReport()} disabled={copyingReport || !reportText.trim()} className="btn-secondary">
+                    {copyingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clipboard className="h-4 w-4" />}
+                    复制 Markdown
+                  </button>
+                  <button onClick={handleDownloadReport} disabled={!reportText.trim()} className="btn-secondary">
+                    <Download className="h-4 w-4" />
+                    下载 .md
+                  </button>
+                </div>
+                {!match ? <p className="mt-3 text-sm text-muted-foreground">请先生成匹配评分，再生成推荐摘要。</p> : null}
+                {report ? <p className="mt-3 text-xs text-muted-foreground">已生成 Markdown 草稿，可在导出前人工调整。</p> : null}
+                <textarea
+                  className="input mt-4 min-h-80 resize-y font-mono text-sm leading-6"
+                  placeholder="生成后可在这里编辑推荐摘要"
+                  value={reportText}
+                  onChange={(event) => setReportText(event.target.value)}
+                />
+              </Panel>
+
+              <div className="grid gap-5 lg:grid-cols-2">
+                <TimelinePanel timeline={timeline} />
+                <JobHistoryPanel jobHistory={jobHistory} />
+              </div>
+            </section>
+          </div>
         </div>
       )}
     </WorkspaceShell>
+  );
+}
+
+function Signal({ icon: Icon, label, value }: { icon: typeof Phone; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-white px-3 py-2">
+      <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold text-muted-foreground">{label}</p>
+        <p className="truncate text-sm font-medium text-foreground">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function DecisionMetric({ label, value, tone }: { label: string; value: string; tone: "success" | "warning" | "danger" | "default" }) {
+  const toneClass = {
+    success: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    warning: "border-amber-200 bg-amber-50 text-amber-800",
+    danger: "border-red-200 bg-red-50 text-red-800",
+    default: "border-border bg-white text-foreground",
+  }[tone];
+  return (
+    <div className={`rounded-md border px-3 py-3 ${toneClass}`}>
+      <p className="text-[11px] font-semibold opacity-75">{label}</p>
+      <p className="mt-1 text-2xl font-semibold leading-none">{value}</p>
+    </div>
+  );
+}
+
+function scoreTone(score: number | undefined): "success" | "warning" | "danger" | "default" {
+  if (score === undefined) return "default";
+  if (score >= 70) return "success";
+  if (score >= 40) return "warning";
+  return "danger";
+}
+
+function Panel({ title, icon, actions, children }: { title: string; icon?: ReactNode; actions?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="panel overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-slate-50/80 px-5 py-4">
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          {icon ? <span className="text-muted-foreground">{icon}</span> : null}
+          {title}
+        </h2>
+        {actions}
+      </div>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border bg-white px-3 py-2">
+      <p className="text-[11px] font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function ProfileFacts({ detail }: { detail: CandidateDetail }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Info label="邮箱" value={detail.candidate.email} />
+      <Info label="当前公司" value={detail.candidate.current_company} />
+      <Info label="工作年限" value={detail.candidate.years_of_experience?.toString()} />
+      <Info label="最高学历" value={detail.candidate.highest_education} />
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="rounded-md border border-border px-3 py-3">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-medium">{value || "待确认"}</p>
+    </div>
+  );
+}
+
+function EvidenceRow({ title, score, body, evidence }: { title: string; score: number | null; body: string; evidence: string | null }) {
+  return (
+    <div className="rounded-md border border-border p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">{title}</p>
+        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{score ?? "-"}</span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
+      {evidence ? <p className="mt-3 border-l-2 border-emerald-300 pl-3 text-xs leading-5 text-muted-foreground">{evidence}</p> : null}
+    </div>
+  );
+}
+
+function InsightList({ title, items, tone }: { title: string; items: string[]; tone: "success" | "warning" | "danger" | "default" }) {
+  const Icon = tone === "success" ? CheckCircle2 : tone === "danger" ? AlertTriangle : tone === "warning" ? ShieldAlert : FileText;
+  return (
+    <Panel title={title} icon={<Icon className="h-4 w-4" />}>
+      {items.length ? (
+        <ul className="space-y-2 text-sm text-muted-foreground">
+          {items.map((item) => (
+            <li key={item} className="border-l-2 border-slate-200 pl-3 leading-6">
+              {item}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">暂无</p>
+      )}
+    </Panel>
+  );
+}
+
+function FieldCandidateTable({ parseRun }: { parseRun: ResumeParseRun }) {
+  const candidates = parseRun.field_candidates.slice(0, 10);
+  return (
+    <div className="overflow-hidden rounded-md border border-border">
+      <div className="grid grid-cols-[1fr_1fr_0.7fr_0.8fr] gap-3 bg-slate-50 px-3 py-2 text-xs font-semibold text-muted-foreground">
+        <span>字段</span>
+        <span>候选值</span>
+        <span>置信度</span>
+        <span>状态</span>
+      </div>
+      <div className="divide-y divide-border">
+        {candidates.map((item) => (
+          <div key={item.id} className="grid grid-cols-[1fr_1fr_0.7fr_0.8fr] gap-3 px-3 py-3 text-sm">
+            <span className="font-medium">{fieldLabel(item.field_name)}</span>
+            <span className="truncate text-muted-foreground" title={stringifyValue(item.value_json)}>{stringifyValue(item.value_json) || "-"}</span>
+            <span>{item.confidence === null ? "-" : Math.round(item.confidence * 100)}</span>
+            <span className={item.selected ? "text-emerald-700" : "text-amber-700"}>{item.selected ? "选中" : "待复核"}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ParseBlocks({ blocks }: { blocks: ResumeParseRun["blocks"] }) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-semibold">段落识别</p>
+      {blocks.length ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {blocks.slice(0, 6).map((block) => (
+            <div key={block.id} className="rounded-md border border-border px-3 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">{block.title || block.block_type}</p>
+                <span className="text-xs text-muted-foreground">{Math.round((block.confidence ?? 0) * 100)}%</span>
+              </div>
+              <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{block.text}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">暂无段落识别结果。</p>
+      )}
+    </div>
+  );
+}
+
+function DuplicateReviewList({
+  items,
+  reviewingDuplicateId,
+  onReview,
+}: {
+  items: CandidateDetail["duplicate_candidates"];
+  reviewingDuplicateId: string | null;
+  onReview: (id: string, status: "ignored" | "confirmed_duplicate") => void;
+}) {
+  if (!items.length) return <p className="text-sm text-muted-foreground">暂无疑似重复记录。</p>;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-800">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>疑似重复，仅供 HR 复核，不自动合并。</p>
+      </div>
+      {items.map((item) => (
+        <div key={item.id} className="rounded-md border border-border px-3 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-semibold">{item.matched_candidate?.name || "姓名待确认"}</p>
+            <DuplicateReviewStatus status={item.status} />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{item.match_reason} / 置信度 {Math.round(item.confidence * 100)}%</p>
+          <p className="mt-2 text-xs text-muted-foreground">{item.matched_candidate?.phone || item.matched_candidate?.email || "联系方式待确认"}</p>
+          {item.review_note ? <p className="mt-2 text-xs text-muted-foreground">{item.review_note}</p> : null}
+          {item.status === "pending_review" ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button onClick={() => onReview(item.id, "ignored")} disabled={reviewingDuplicateId === item.id} className="btn-secondary h-9 text-xs">
+                {reviewingDuplicateId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                忽略
+              </button>
+              <button onClick={() => onReview(item.id, "confirmed_duplicate")} disabled={reviewingDuplicateId === item.id} className="btn-primary h-9 text-xs">
+                {reviewingDuplicateId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                确认
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -577,43 +794,9 @@ function DuplicateReviewStatus({ status }: { status: string }) {
   return <span className={`shrink-0 rounded px-2 py-1 text-xs font-semibold ${tone}`}>{labels[status] ?? status}</span>;
 }
 
-function Panel({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="panel p-5">
-      <h2 className="text-base font-semibold">{title}</h2>
-      <div className="mt-4">{children}</div>
-    </div>
-  );
-}
-
-function Info({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div className="mt-3">
-      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-medium">{value || "待确认"}</p>
-    </div>
-  );
-}
-
-function List({ title, items }: { title: string; items: string[] }) {
-  return (
-    <Panel title={title}>
-      {items.length ? (
-        <ul className="space-y-2 text-sm text-muted-foreground">
-          {items.map((item) => (
-            <li key={item} className="rounded-md bg-muted px-3 py-2">{item}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-muted-foreground">暂无</p>
-      )}
-    </Panel>
-  );
-}
-
 function TagList({ title, items }: { title: string; items: string[] }) {
   return (
-    <div className="mt-4">
+    <div className="mt-4 first:mt-0">
       <p className="text-xs font-semibold text-muted-foreground">{title}</p>
       {items.length ? (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -631,12 +814,10 @@ function TagList({ title, items }: { title: string; items: string[] }) {
 function InlineList({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="mt-4">
-      <p className="text-sm font-semibold">{title}</p>
+      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
       {items.length ? (
         <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-          {items.map((item) => (
-            <li key={item} className="rounded-md bg-muted px-3 py-2">{item}</li>
-          ))}
+          {items.map((item) => <li key={item}>{item}</li>)}
         </ul>
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">暂无</p>
@@ -647,12 +828,12 @@ function InlineList({ title, items }: { title: string; items: string[] }) {
 
 function StructuredItems({ title, items }: { title: string; items: Record<string, unknown>[] }) {
   return (
-    <div className="mt-4">
+    <div>
       <p className="text-sm font-semibold">{title}</p>
       {items.length ? (
         <div className="mt-2 space-y-2">
           {items.map((item, index) => (
-            <div key={`${title}-${index}`} className="rounded-md bg-muted px-3 py-3 text-sm leading-6 text-muted-foreground">
+            <div key={`${title}-${index}`} className="rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
               {formatStructuredItem(item)}
             </div>
           ))}
@@ -661,6 +842,50 @@ function StructuredItems({ title, items }: { title: string; items: Record<string
         <p className="mt-2 text-sm text-muted-foreground">暂无</p>
       )}
     </div>
+  );
+}
+
+function TimelinePanel({ timeline }: { timeline: CandidateTimelineEvent[] }) {
+  return (
+    <Panel title="操作时间线" icon={<History className="h-4 w-4" />}>
+      {timeline.length ? (
+        <div className="space-y-3">
+          {timeline.slice(0, 8).map((event) => (
+            <div key={event.id} className="border-l-2 border-slate-200 pl-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">{event.action_summary}</p>
+                <time className="text-xs text-muted-foreground">{formatDateTime(event.created_at)}</time>
+              </div>
+              {event.after_value || event.before_value ? <p className="mt-1 text-sm text-muted-foreground">{event.after_value || event.before_value}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">暂无时间线记录。</p>
+      )}
+    </Panel>
+  );
+}
+
+function JobHistoryPanel({ jobHistory }: { jobHistory: CandidateJobHistoryItem[] }) {
+  return (
+    <Panel title="历史岗位" icon={<BriefcaseBusiness className="h-4 w-4" />}>
+      {jobHistory.length ? (
+        <div className="space-y-3">
+          {jobHistory.map((item) => (
+            <div key={item.job_id} className="rounded-md border border-border px-3 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <Link href={`/jobs/${item.job_id}`} className="text-sm font-semibold text-primary">{item.job_title}</Link>
+                <span className="status-pill">{item.candidate_status}</span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">岗位状态：{item.job_status} / 更新于 {formatDateTime(item.updated_at)}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">暂无历史岗位。</p>
+      )}
+    </Panel>
   );
 }
 
@@ -674,15 +899,49 @@ function formatStructuredItem(item: Record<string, unknown>) {
   return JSON.stringify(item);
 }
 
+function fieldLabel(fieldName: string) {
+  const labels: Record<string, string> = {
+    name: "姓名",
+    phone: "手机号",
+    email: "邮箱",
+    city: "城市",
+    years_of_experience: "工作年限",
+    highest_education: "最高学历",
+    current_company: "当前公司",
+    current_title: "当前岗位",
+    skills: "技能",
+    education: "教育经历",
+    work_experiences: "工作经历",
+    project_experiences: "项目经历",
+    certifications: "证书",
+    languages: "语言",
+    awards: "奖项",
+    self_evaluation: "自我评价",
+  };
+  return labels[fieldName] ?? fieldName;
+}
+
+function stringifyValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map((item) => stringifyValue(item)).filter(Boolean).join("、");
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = ["name", "school", "company", "title", "degree", "description", "raw"];
+    const parts = preferred.map((key) => record[key]).filter((item) => typeof item === "string" && item.trim()).map(String);
+    return parts.length ? parts.join(" / ") : JSON.stringify(value);
+  }
+  return "";
+}
+
 function renderHighlightedPreview(content: string, keywords: string[]): ReactNode[] {
   const ranges = keywords.flatMap((keyword) => findAllRanges(content, keyword));
   const merged = mergeRanges(ranges, content.length);
   const nodes: ReactNode[] = [];
   let cursor = 0;
   for (const range of merged) {
-    if (range.start > cursor) {
-      nodes.push(content.slice(cursor, range.start));
-    }
+    if (range.start > cursor) nodes.push(content.slice(cursor, range.start));
     nodes.push(
       <mark key={`${range.start}-${range.end}`} className="rounded-sm bg-emerald-100 px-0.5 text-emerald-950">
         {content.slice(range.start, range.end)}
@@ -690,9 +949,7 @@ function renderHighlightedPreview(content: string, keywords: string[]): ReactNod
     );
     cursor = range.end;
   }
-  if (cursor < content.length) {
-    nodes.push(content.slice(cursor));
-  }
+  if (cursor < content.length) nodes.push(content.slice(cursor));
   return nodes;
 }
 
@@ -711,18 +968,13 @@ function findAllRanges(content: string, keyword: string): Array<{ start: number;
 
 function mergeRanges(ranges: Array<{ start: number; end: number }>, maxLength: number) {
   const sorted = ranges
-    .map((range) => ({
-      start: Math.max(0, Math.min(maxLength, range.start)),
-      end: Math.max(0, Math.min(maxLength, range.end)),
-    }))
+    .map((range) => ({ start: Math.max(0, Math.min(maxLength, range.start)), end: Math.max(0, Math.min(maxLength, range.end)) }))
     .filter((range) => range.end > range.start)
     .sort((a, b) => a.start - b.start || b.end - a.end);
   const result: Array<{ start: number; end: number }> = [];
   for (const range of sorted) {
     const previous = result[result.length - 1];
-    if (!previous || range.start >= previous.end) {
-      result.push(range);
-    }
+    if (!previous || range.start >= previous.end) result.push(range);
   }
   return result;
 }
