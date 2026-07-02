@@ -3,7 +3,13 @@ from sqlalchemy.orm import Session
 
 from app.models.candidate import Candidate
 from app.models.correction import FieldCorrectionLog
-from app.models.resume import ResumeFieldExtraction, ResumeFile
+from app.models.resume import (
+    ResumeFieldCandidate,
+    ResumeFieldExtraction,
+    ResumeFile,
+    ResumeParseBlock,
+    ResumeParseRun,
+)
 from app.models.status import CandidateJobStatus
 
 
@@ -102,6 +108,41 @@ class ResumeRepository:
         for row in field_extractions:
             self.db.refresh(row)
         return field_extractions
+
+
+    def create_parse_run(
+        self,
+        parse_run: ResumeParseRun,
+        blocks: list[ResumeParseBlock],
+        field_candidates: list[ResumeFieldCandidate],
+    ) -> ResumeParseRun:
+        self.db.add(parse_run)
+        self.db.flush()
+        for block in blocks:
+            block.parse_run_id = parse_run.id
+            self.db.add(block)
+        for candidate in field_candidates:
+            candidate.parse_run_id = parse_run.id
+            self.db.add(candidate)
+        self.db.commit()
+        self.db.refresh(parse_run)
+        return parse_run
+
+    def get_latest_parse_run(self, resume_file_id: str) -> ResumeParseRun | None:
+        statement = (
+            select(ResumeParseRun)
+            .where(ResumeParseRun.resume_file_id == resume_file_id)
+            .order_by(ResumeParseRun.created_at.desc())
+        )
+        return self.db.scalars(statement).first()
+
+    def list_parse_blocks(self, parse_run_id: str) -> list[ResumeParseBlock]:
+        statement = select(ResumeParseBlock).where(ResumeParseBlock.parse_run_id == parse_run_id)
+        return list(self.db.scalars(statement).all())
+
+    def list_field_candidates(self, parse_run_id: str) -> list[ResumeFieldCandidate]:
+        statement = select(ResumeFieldCandidate).where(ResumeFieldCandidate.parse_run_id == parse_run_id)
+        return list(self.db.scalars(statement).all())
 
     def list_field_extractions(self, resume_file_id: str) -> list[ResumeFieldExtraction]:
         statement = select(ResumeFieldExtraction).where(ResumeFieldExtraction.resume_file_id == resume_file_id)

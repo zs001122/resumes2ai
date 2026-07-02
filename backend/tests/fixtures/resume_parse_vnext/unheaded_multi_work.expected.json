@@ -1,0 +1,22 @@
+{
+  "file_name": "数据开发-杨晓飞.txt",
+  "name": "杨晓飞",
+  "phone": "18126839220",
+  "email": "yang@example.com",
+  "city": "广州",
+  "years_of_experience": 5.0,
+  "education_count": 1,
+  "work_count": 2,
+  "project_count": 1,
+  "low_confidence_absent": [
+    "education",
+    "work_experiences",
+    "project_experiences"
+  ],
+  "required_candidate_extractors": [
+    "section:basics:rules",
+    "section:education:rules",
+    "section:work:rules",
+    "section:projects:rules"
+  ]
+}

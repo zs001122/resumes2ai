@@ -7,8 +7,8 @@ from dataclasses import dataclass
 SECTION_ALIASES = {
     "education": ["教育经历", "教育背景", "学历背景", "教育信息"],
     "work": ["工作经历", "工作经验", "实习经历", "任职经历", "职业经历"],
-    "project": ["项目经历", "项目经验", "项目实践", "项目介绍", "校园个人项目"],
-    "skills": ["专业技能", "技能清单", "技能特长"],
+    "project": ["项目经历", "项目经验", "项目实践", "项目介绍", "校园个人项目", "核心项目经历", "核心项目", "项目案例", "代表项目", "主要项目"],
+    "skills": ["专业技能", "技能清单", "技能特长", "核心技能", "专业能力", "技术能力"],
     "intention": ["求职意向"],
     "profile": ["基本信息", "个人信息"],
     "certifications": ["证书", "资格证书", "专业证书", "技能证书", "认证", "荣誉证书"],
@@ -53,6 +53,11 @@ def extract_sections(lines: list[str]) -> dict[str, list[str]]:
             current = embedded_section
             if remainder:
                 sections[current].append(remainder)
+            continue
+        transition = _boundary_transition(current, line)
+        if transition:
+            current = transition
+            sections[current].append(line)
             continue
         if current:
             sections[current].append(line)
@@ -111,11 +116,11 @@ def meaningful_lines(lines: list[str]) -> list[str]:
     return [line for line in lines if line and not section_key(line) and line not in ALL_SECTION_TITLES]
 
 
-def split_section_items(lines: list[str]) -> list[list[str]]:
+def split_section_items(lines: list[str], item_kind: str = "generic") -> list[list[str]]:
     items: list[list[str]] = []
     current: list[str] = []
     for line in meaningful_lines(lines):
-        starts_new = bool(_date_range_search(line) and not _is_date_only_line(line)) or re.match(r"^(项目名称|项目)[:：]", line)
+        starts_new = bool(_date_range_search(line) and not _is_date_only_line(line)) or _looks_like_item_start(line, item_kind)
         if current and starts_new:
             items.append(current)
             current = []
@@ -154,6 +159,14 @@ def _infer_work_project_sections(lines: list[str]) -> tuple[list[str], list[str]
         }:
             current = None
             continue
+        transition = _boundary_transition(current, line)
+        if transition:
+            current = transition
+            if current == "project":
+                project.append(line)
+            elif current == "work":
+                work.append(line)
+            continue
         if _looks_like_project_header(line):
             current = "project"
             project.append(line)
@@ -170,6 +183,59 @@ def _infer_work_project_sections(lines: list[str]) -> tuple[list[str], list[str]
         elif current == "work" and line:
             work.append(line)
     return work, project
+
+
+def _boundary_transition(current: str | None, line: str) -> str | None:
+    project_boundary = _looks_like_project_boundary(line)
+    work_boundary = _looks_like_work_boundary(line)
+    if current == "work" and project_boundary:
+        return "project"
+    if current == "project" and _looks_like_company_work_header(line) and not project_boundary:
+        return "work"
+    if current == "self_evaluation":
+        if project_boundary:
+            return "project"
+        if work_boundary:
+            return "work"
+    return None
+
+
+def _looks_like_project_boundary(line: str) -> bool:
+    return _looks_like_project_heading(line) or _looks_like_project_header(line)
+
+
+def _looks_like_work_boundary(line: str) -> bool:
+    return _looks_like_work_header(line)
+
+
+def _looks_like_company_work_header(line: str) -> bool:
+    return bool(re.search(r"(有限公司|公司|集团).{0,30}(工程师|开发|分析师|实习|ETL|etl|算法)", line))
+
+
+def _looks_like_project_heading(line: str) -> bool:
+    clean = re.sub(r"[:：\s]+$", "", line.strip())
+    compact = re.sub(r"\s+", "", clean)
+    headings = {
+        "核心项目经历",
+        "核心项目",
+        "项目案例",
+        "代表项目",
+        "主要项目",
+        "项目经历",
+        "项目经验",
+        "项目实践",
+        "项目介绍",
+    }
+    return compact in headings
+
+
+def _looks_like_item_start(line: str, item_kind: str = "generic") -> bool:
+    clean = line.strip()
+    if re.match(r"^(项目名称|项目)[:：]", clean):
+        return True
+    if item_kind != "project":
+        return False
+    return bool(re.match(r"^(?:\d{1,2}[.、．]|[一二三四五六七八九十]+[、.．])\s*[^。；;]{2,80}$", clean))
 
 
 def _looks_like_work_header(line: str) -> bool:

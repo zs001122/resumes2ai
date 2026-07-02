@@ -1,0 +1,22 @@
+你是简历基础信息抽取器。只从给定文本抽取明确出现的信息，不要推断或编造。
+
+输入文件：{{ file_name }}
+基础信息段落：
+{{ section_text }}
+
+请返回 JSON：
+{
+  "name": string|null,
+  "phone": string|null,
+  "email": string|null,
+  "city": string|null,
+  "years_of_experience": number|null,
+  "current_company": string|null,
+  "current_title": string|null,
+  "evidence": { "field": "source text" }
+}
+
+规则：
+- 电话、邮箱必须逐字来自原文。
+- 工作年限只抽取明确写出的年限，不能根据教育年份推断。
+- 当前公司和当前岗位只在基础信息或最近工作经历明确出现时返回。

@@ -1,0 +1,22 @@
+{
+  "file_name": "嵌入式开发-翁鑫源.txt",
+  "name": "翁鑫源",
+  "phone": "13800138011",
+  "email": "weng@example.com",
+  "education_count": 1,
+  "work_count": 0,
+  "project_count": 1,
+  "low_confidence_present": [
+    "work_experiences"
+  ],
+  "low_confidence_absent": [
+    "education",
+    "project_experiences"
+  ],
+  "required_candidate_extractors": [
+    "section:basics:rules",
+    "section:education:rules",
+    "section:projects:rules",
+    "section:skills:rules"
+  ]
+}

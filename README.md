@@ -1,32 +1,25 @@
 # AI 简历筛选工作台
 
-面向 HR 的 AI 简历筛选工作台。当前项目已从 MVP 扩展到 V2.1.2，并完成整体收缩：V2 不再新增业务能力，只保留可试用招聘工作台的交付闭环、缺陷修复、验收脚本和启动说明。
+面向 HR 的 AI 简历筛选工作台。项目当前处于 V2 稳定化和简历解析质量增强实验阶段：主业务链路已冻结，不再直接往 V2 增加新业务功能；允许继续修复阻断验收、启动、解析质量和证据复核体验的问题。
 
-## 当前边界
+## 当前状态
 
-V2 交付范围：
+已形成可试用招聘初筛闭环：
 
-- 工作台总览、待办和异常概览。
-- 岗位创建、复制、暂停、重新开放、关闭和 JD 质量检查。
-- 岗位内上传和统一上传。
-- 简历解析、上传队列、失败重试和自动评分。
-- 简历结构化抽取采用规则优先、AI 兜底增强：规则负责手机号、邮箱、明确键值对、日期区间、学校/公司归一化；AI 负责职责总结、技能熟练度、无结构项目描述和中英文混合文本。
-- 候选人列表筛选、批量状态、批量入库和批量重评。
-- 候选人详情、匹配解释、原文复核、备注和时间线。
-- 轻量人才库、标签、历史岗位和跨岗位搜索。
-- 岗位标准版本、历史候选人重评和评分追溯。
-- 重复候选人人工复核。
-- 推荐摘要 Markdown 生成、编辑、复制和下载。
+```text
+工作台总览
+  -> 创建 / 管理岗位
+  -> 上传简历
+  -> 解析简历并生成候选人
+  -> 自动评分与分项解释
+  -> 候选人列表筛选与批量操作
+  -> 候选人详情复核、备注、时间线
+  -> 人才库沉淀与跨岗位搜索
+  -> 岗位标准版本、历史重评、重复候选人人工复核
+  -> 推荐摘要 Markdown 生成、编辑、复制、下载
+```
 
-V2 不再进入：
-
-- 报告历史保存。
-- 文本粘贴录入简历。
-- ZIP 批量上传。
-- PDF / Word 推荐报告导出。
-- 后台异步任务队列。
-- 自动合并重复候选人、候选人主档案合并、多岗位归属。
-- 复杂权限、审批、面试日程、通知、ATS、Offer、招聘大屏和图片 OCR。
+当前实验分支重点是简历解析 vNext：不改 V2 主业务入口，通过 parse run、blocks、field candidates、source text 和人工修正页证据闭环，提高结构化字段质量。
 
 ## 技术栈
 
@@ -41,7 +34,7 @@ V2 不再进入：
 resumes2ai/
   backend/          FastAPI 后端、迁移、测试
   frontend/         Next.js 前端
-  docs/             设计、验收、交付和历史拆解文档
+  docs/             路线、记录、待办和模块文档
   scripts/api_tests 手动 API 验收脚本
 ```
 
@@ -50,7 +43,7 @@ resumes2ai/
 推荐一键启动前后端：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run-dev.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run-dev.ps1
 ```
 
 该脚本会补齐本地环境文件、执行后端迁移、启动后端 `8010` 和前端 `3000`，按 `Ctrl+C` 可同时停止两个服务。
@@ -114,15 +107,23 @@ cd backend
 
 ## 文档入口
 
-当前交付入口：
+核心文档：
 
-- [V2_STATUS_AND_ROADMAP.md](docs/V2_STATUS_AND_ROADMAP.md)：V2 完成范围、冻结边界、收缩结论和下一大版本候选池。
-- [V2_ACCEPTANCE_GUIDE.md](docs/V2_ACCEPTANCE_GUIDE.md)：V2 启动、自动验证、演示数据、手动验收、已知限制和冻结规则。
+- [ROADMAP.md](docs/ROADMAP.md)：长期主体开发路线，记录产品方向、版本路线、模块划分和冻结规则。
+- [CHANGELOG.md](docs/CHANGELOG.md)：开发记录，按时间追加每轮背景、变更、验收、遗留问题和下一步。
+- [BACKLOG.md](docs/BACKLOG.md)：待开发功能池，新业务能力先进入这里评估。
 
-设计与历史追溯：
+模块文档：
 
-- [HR_RESUME_SCREENING_TOOL_V2_DESIGN.md](docs/HR_RESUME_SCREENING_TOOL_V2_DESIGN.md)：V2 产品设计和模块边界，仅作设计依据。
-- [RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md](docs/RESUME_PARSE_MATCH_OPTIMIZATION_PLAN.md)：真实简历样本解析与匹配质量修复记录，第一轮已收口，后续只作回归参考。
-- [V2_RELEASE_CHECKLIST.md](docs/V2_RELEASE_CHECKLIST.md)：旧链接兼容页，正文已并入 V2 验收说明。
+- [frontend.md](docs/modules/frontend.md)：前端 UI、页面、交互、修正页、证据展示。
+- [backend.md](docs/modules/backend.md)：API、数据模型、上传链路、候选人、岗位、时间线。
+- [parser.md](docs/modules/parser.md)：简历解析、vNext、section、field candidates、source text。
+- [matching.md](docs/modules/matching.md)：匹配评分、解释、推荐摘要。
+- [testing.md](docs/modules/testing.md)：验收脚本、fixtures、真实样本回归、测试策略。
+- [operations.md](docs/modules/operations.md)：启动、环境、部署、本地数据、GitHub 凭据。
 
-历史拆解文档保留用于追溯，不再作为当前计划入口。
+局部说明：
+
+- [backend/README.md](backend/README.md)：后端启动、环境变量和验收。
+- [frontend/README.md](frontend/README.md)：前端启动和验收。
+- [scripts/api_tests/README.md](scripts/api_tests/README.md)：API 验收脚本说明。

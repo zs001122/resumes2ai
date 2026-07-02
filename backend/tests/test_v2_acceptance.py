@@ -288,6 +288,57 @@ def test_campus_section_stops_work_experience_and_preserves_spaced_date_range():
     assert "校园" not in work["description"]
 
 
+def test_project_heading_stops_work_section_overcapture():
+    parsed = parse_resume_text(
+        "后端开发-杨梓灼.pdf",
+        """杨梓灼
+工作经历
+广州华源格林科技有限公司 | python 开发工程师
+任职时间：2023 年 8 月至今
+负责南方电网数字化转型相关业务系统的时序算法、LLM 模型、后端服务及全栈应用。
+核心项目经历
+1. 国内外学术期刊数据采集管理系统
+项目背景：面向科研机构打造学术文献数据管理平台。
+技术栈：FastAPI、Selenium、Playwright、Celery、MongoDB、Redis
+核心技能
+熟练使用 Python 进行业务服务开发。
+""",
+    )
+
+    candidate = parsed.candidate_data
+    assert len(candidate["work_experiences"]) == 1
+    assert len(candidate["project_experiences"]) == 1
+    work = candidate["work_experiences"][0]
+    project = candidate["project_experiences"][0]
+    assert "核心项目经历" not in (work["description"] or "")
+    assert "国内外学术期刊" not in (work["description"] or "")
+    assert project["name"] == "1. 国内外学术期刊数据采集管理系统"
+    assert "FastAPI" in project["technologies"]
+
+
+def test_self_evaluation_stops_before_work_header():
+    parsed = parse_resume_text(
+        "直聘简历-未命名.pdf",
+        """候选人
+个人优势
+2 年智能化应用开发与企业项目落地经验，具备需求分析、方案设计、开发部署能力。
+熟练掌握 Python，具备多技术栈协同开发与系统集成能力。
+广州智算信息技术有限公司 算法工程师 2022.10-至今
+负责智能体开发、企业知识库和自动化流程落地。
+项目经历
+项目描述：企业知识库问答系统
+技术栈：Python Docker LangChain
+""",
+    )
+
+    candidate = parsed.candidate_data
+    assert candidate["self_evaluation"]
+    assert "广州智算信息技术有限公司" not in candidate["self_evaluation"]
+    assert len(candidate["work_experiences"]) == 1
+    assert candidate["work_experiences"][0]["company"] == "广州智算信息技术有限公司"
+    assert candidate["work_experiences"][0]["title"] == "算法工程师"
+
+
 def test_unheaded_education_is_extracted_before_project_sections():
     parsed = parse_resume_text(
         "24年应届生-翁鑫源.docx",
@@ -630,3 +681,21 @@ def test_rematch_reports_candidates_outside_job(client: TestClient):
     assert payload["succeeded"] == 1
     assert payload["failed"] == 1
     assert payload["failures"][0]["candidate_id"] == candidate_b_id
+
+def test_upload_persists_vnext_parse_run(client: TestClient):
+    job_id = create_job(client, "软件开发实习生")
+    upload_response = upload_text(client, job_id, "后端开发-陈晓明.txt", RESUME_ONE)
+    assert upload_response.status_code == 201
+    resume_file_id = upload_response.json()["resume_file"]["id"]
+
+    response = client.get(f"/api/resume-files/{resume_file_id}/parse-runs/latest")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["resume_file_id"] == resume_file_id
+    assert payload["candidate_id"] == upload_response.json()["candidate"]["id"]
+    assert payload["parser_version"].startswith("resume-parser-vnext")
+    assert payload["status"] == "success"
+    assert isinstance(payload["quality_score"], float)
+    assert payload["blocks"]
+    assert any(item["field_name"] == "phone" and item["selected"] for item in payload["field_candidates"])
