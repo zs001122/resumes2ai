@@ -351,7 +351,7 @@ def _extract_unheaded_education(lines: list[str]) -> list[dict]:
 
 def _extract_work_experiences(lines: list[str]) -> list[dict]:
     items = []
-    for chunk in split_section_items(lines):
+    for chunk in split_section_items(lines, item_kind="work"):
         chunk = _merge_date_only_lines(chunk)
         line = "；".join(chunk)
         header = chunk[0]
@@ -386,7 +386,7 @@ def _extract_work_experiences(lines: list[str]) -> list[dict]:
 
 def _extract_project_experiences(lines: list[str]) -> list[dict]:
     items = []
-    chunks = split_section_items(lines)
+    chunks = split_section_items(lines, item_kind="project")
     for chunk in chunks:
         chunk = _merge_date_only_lines(chunk)
         text = "；".join(chunk)

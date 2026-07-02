@@ -28,7 +28,7 @@ async def test_resume_parser_vnext_section_candidates(case_name, monkeypatch):
     parsed = await parse_resume_text_vnext(expected["file_name"], resume_text)
     candidate = parsed.parsed_resume.candidate_data
 
-    assert parsed.parser_version == "resume-parser-vnext-0.2"
+    assert parsed.parser_version == "resume-parser-vnext-0.3"
     assert parsed.blocks
     assert parsed.field_candidates
     assert parsed.quality_score >= 45

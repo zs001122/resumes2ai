@@ -87,3 +87,19 @@ No browser automation dependency is installed in the frontend project, so click-
 3. Add basics extraction fallback for unlabeled names in PDF export formats.
 4. Add unheaded education recovery for exported resume layouts.
 5. Adjust low-confidence policy so optional fields like certifications do not always reduce quality.
+
+## vNext 0.3 Follow-up - Section Boundary Fix
+
+After implementing section boundary rules and re-running `POST /api/resume-files/{resume_file_id}/parse` for both real samples:
+
+| Case | Latest candidate ID | Parser version | Quality | Work count | Project count | Result |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| A | `6c09ab77-a34f-4707-ae00-af993f0409d8` | `resume-parser-vnext-0.3` | 92 | 1 | 8 | `核心项目经历` is now separated into the project block; work no longer splits numbered responsibility bullets into multiple work rows. |
+| B | `7af68e6b-5b73-4eea-816d-04ff0dc5b254` | `resume-parser-vnext-0.3` | 68 | 2 | 4 | `self_evaluation` now stops before later company/work headers; work history is recovered as work rows. |
+
+Remaining issues after v0.3:
+
+1. Case A work description is still long because numbered responsibilities remain inside the single work item. This is acceptable for the boundary fix, but item-level evidence should later separate work responsibilities from project evidence more cleanly.
+2. Case A project extraction now splits numbered projects, but project evidence can still be long inside each project item.
+3. Case B still misses `name` and structured `education`; these are separate basics/education recovery tasks, not section-boundary regressions.
+4. Case B includes one work item with no company (`智能体开发 算法工程师 2025.01-至今`), which should be reviewed in a later work-experience normalization pass.

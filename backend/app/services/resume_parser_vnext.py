@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.services.resume_parser import ParsedResume, parse_resume_text_with_ai
 from app.services.resume_sections import normalized_lines, section_blocks
 
-PARSER_VERSION = "resume-parser-vnext-0.2"
+PARSER_VERSION = "resume-parser-vnext-0.3"
 
 BASIC_FIELDS = [
     "name",
