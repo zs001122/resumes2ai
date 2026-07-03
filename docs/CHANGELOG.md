@@ -2,6 +2,109 @@
 
 本文档按时间追加项目关键开发、实验、修复和文档重构记录。它不是完整 git log，而是便于后续回顾决策背景、验收结果和遗留问题的开发日志。
 
+## 2026-07-03 - resume parser vNext 0.4 project item normalization
+
+Branch: `experiment/resume-parse-vnext`
+Commit: pending
+
+背景：
+
+导出型 PDF 会出现连续两个项目标题，随后才出现两个 `项目描述` 块的布局。旧逻辑会让前一个项目只剩标题，后一个项目吞掉两个描述块，导致项目 raw 互相串。
+
+变更：
+
+- 在 project chunks 层新增错位归一化：当前 chunk 是项目标题且下一 chunk 是项目标题 + 多个项目描述块时，把第一个描述块回填给前一个标题。
+- 保留后一个项目标题，并只让它承接后续描述块，避免多个项目 raw 互相串。
+- 新增 `exported_pdf_project_order` fixture，断言智能体项目和招标项目各自只包含自己的描述，不包含对方描述。
+- vNext 测试增加 `project_expectations`，支持按项目名检查 raw contains / excludes。
+
+验收：
+
+- `./venv/bin/python -m pytest tests/test_resume_parser_vnext.py -q`：7 passed。
+- `./venv/bin/python -m pytest -q`：23 passed，1 warning。
+- `./venv/bin/ruff check app tests`：通过。
+- `git diff --check`：通过。
+- 真实 Case B 复跑：`AI能力开发平台` raw 只含 AI 平台描述，不含招标描述；`招标书信息采集工具开发` raw 只含招标描述，不含 AI 平台描述；low confidence 和 warnings 为空。
+
+遗留问题：
+
+- 仍需更多真实脱敏样本覆盖不同 PDF 导出布局。
+- 人工修正反馈还没有转成 parser regression fixture。
+
+下一步：
+
+- 优先进入 correction feedback，或继续补真实样本 regression fixtures。
+
+## 2026-07-03 - resume parser vNext 0.4 work normalization
+
+Branch: `experiment/resume-parse-vnext`
+Commit: pending
+
+背景：
+
+Case B 在 name 和 education 恢复后，仍存在一条有岗位和时间但缺 company 的工作经历；同时 project raw / block 可能混入联系方式、姓名和教育行，影响 HR 看证据。
+
+变更：
+
+- work normalization：当后续 work item 缺 company 但有岗位或时间时，继承上一条明确公司。
+- title 识别优先级调整：优先识别 `工程师`、`分析师` 等职位，避免把业务方向如“智能体开发”误当岗位。
+- work/project raw 去污染：遇到联系方式、求职意向、工作经验、学校+学历+时间行时截断经验条目。
+- section boundary 同步收紧：project/work 遇到联系方式切到 profile，遇到学校+学历+时间切到 education。
+- vNext fixture 增加 `work_companies`、`work_titles` 和 `project_raw_excludes` 断言。
+
+验收：
+
+- `./venv/bin/python -m pytest tests/test_resume_parser_vnext.py -q`：6 passed。
+- `./venv/bin/python -m pytest -q`：22 passed，1 warning。
+- `./venv/bin/ruff check app tests`：通过。
+- `git diff --check`：通过。
+- 真实 Case B 复跑：第二条 work 继承 `广州智算信息技术有限公司`，title 为 `算法工程师`；project raw 和 project block 不再包含手机号、姓名、学校；low confidence 和 warnings 为空。
+
+遗留问题：
+
+- 导出型 PDF 的项目标题和项目描述仍可能顺序错位，需要后续 project item normalization。
+- 人工修正反馈还没有转成 parser regression fixture。
+
+下一步：
+
+- 进入 project item normalization 或 correction feedback，优先级按下一轮真实样本观察决定。
+
+## 2026-07-02 - resume parser vNext 0.4 fallback and confidence policy
+
+Branch: `experiment/resume-parse-vnext`
+Commit: pending
+
+背景：
+
+用户确认 parser 模块继续优化四项质量问题：无标签姓名、无标题教育、工作/项目证据过长、核心字段和可选字段低置信策略混在一起。
+
+变更：
+
+- parser 版本升级为 `resume-parser-vnext-0.4`。
+- basics fallback：从简历头部无标签姓名行恢复候选人姓名，并支持在联系方式/人口信息行后恢复后置姓名，覆盖导出型 PDF 或文件名不可用场景。
+- education recovery：无 `教育经历` 标题时，在 1-3 行窗口内组合时间、学校、学历和专业恢复教育经历；候选按教育信号、证据长度和噪声排序，避免项目/岗位文本污染教育 source text。
+- item-level evidence：为 work/project 生成 item 级候选 extractor，并把 source text 控制在 260 字以内。
+- confidence policy：低置信字段改为核心字段优先，`certifications` 等可选字段缺失不再进入低置信列表或质量扣分。
+- 新增 `exported_pdf_layout`、`exported_pdf_contact_name` vNext fixtures。
+
+验收：
+
+- `./venv/bin/python -m pytest tests/test_resume_parser_vnext.py -q`：6 passed。
+- `./venv/bin/python -m pytest -q`：22 passed，1 warning。
+- `./venv/bin/ruff check app tests`：通过。
+- 真实样本复跑：`杨梓灼（python后端、AI应用开发）.pdf` 和 `直聘简历-未命名 (1).pdf` 均生成 `resume-parser-vnext-0.4`；Case B 恢复 `name=吴树锌`、`education=韶关学院/本科/信息与计算科学/2019-2023`，低置信字段和 warnings 为空。
+
+遗留问题：
+
+- 有岗位和时间但缺 company 的 work item 仍需要后续 normalization。
+- work/project raw 仍可能受联系方式或相邻 section 污染，需要继续缩短并归一化证据。
+- 人工修正反馈还没有转成 parser regression fixture。
+
+下一步：
+
+- 进入 work normalization，优先处理缺 company 但有岗位和时间的工作经历。
+- 把真实样本缺陷继续补成 parser regression fixture。
+
 ## 2026-07-02 - 文档结构重构为路线、记录和模块文档
 
 Branch: `experiment/resume-parse-vnext`

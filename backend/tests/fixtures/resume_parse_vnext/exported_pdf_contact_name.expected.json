@@ -1,0 +1,40 @@
+{
+  "file_name": "resume_export_contact.pdf",
+  "name": "吴树锌",
+  "phone": "15992597765",
+  "email": "935367476@qq.com",
+  "city": "广州",
+  "years_of_experience": 3.0,
+  "skills_any": [
+    "Python",
+    "FastAPI",
+    "Redis"
+  ],
+  "education_count": 1,
+  "work_count": 2,
+  "project_count": 2,
+  "low_confidence_absent": [
+    "name",
+    "education",
+    "certifications"
+  ],
+  "required_candidate_extractors": [
+    "section:basics:rules",
+    "section:education:rules",
+    "section:work:rules",
+    "section:projects:rules"
+  ],
+  "work_companies": [
+    "广州智算信息技术有限公司",
+    "广州智算信息技术有限公司"
+  ],
+  "work_titles": [
+    "算法工程师",
+    "算法工程师"
+  ],
+  "project_raw_excludes": [
+    "15992597765",
+    "吴树锌",
+    "韶关学院"
+  ]
+}

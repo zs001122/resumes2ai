@@ -1,0 +1,54 @@
+{
+  "file_name": "exported_pdf_project_order.pdf",
+  "name": "王磊",
+  "phone": "13800138000",
+  "email": "wanglei@example.com",
+  "city": "广州",
+  "years_of_experience": 4.0,
+  "education_count": 1,
+  "work_count": 2,
+  "project_count": 2,
+  "low_confidence_absent": [
+    "name",
+    "education",
+    "certifications"
+  ],
+  "required_candidate_extractors": [
+    "section:basics:rules",
+    "section:education:rules",
+    "section:work:rules",
+    "section:projects:rules"
+  ],
+  "work_companies": [
+    "广州智算信息技术有限公司",
+    "广州智算信息技术有限公司"
+  ],
+  "work_titles": [
+    "算法工程师",
+    "算法工程师"
+  ],
+  "project_expectations": [
+    {
+      "name_contains": "智能体助手平台",
+      "raw_contains": [
+        "智能体助手平台",
+        "知识库问答"
+      ],
+      "raw_excludes": [
+        "招标信息采集工具开发",
+        "招标公告自动采集"
+      ]
+    },
+    {
+      "name_contains": "招标书信息采集工具开发",
+      "raw_contains": [
+        "招标书信息采集工具开发",
+        "招标公告自动采集"
+      ],
+      "raw_excludes": [
+        "智能体助手平台建设",
+        "知识库问答"
+      ]
+    }
+  ]
+}

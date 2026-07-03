@@ -51,7 +51,7 @@ AI 简历筛选工作台面向 HR 和招聘负责人，目标是把岗位驱动�
 - 分支：`experiment/resume-parse-vnext`
 - 方向：简历解析 vNext 证据闭环。
 - 边界：不新增业务入口，不改 V2 上传后主流程。
-- 当前版本：`resume-parser-vnext-0.3`。
+- 当前版本：`resume-parser-vnext-0.4`。
 
 ## 4. 模块地图
 
@@ -201,14 +201,13 @@ AI 简历筛选工作台面向 HR 和招聘负责人，目标是把岗位驱动�
 - 候选人详情页展示解析证据。
 - 修正页展示候选字段，低置信字段优先，点击候选值可填入表单。
 - `resume-parser-vnext-0.3` 修复 work/project/self-evaluation section 边界。
+- `resume-parser-vnext-0.4` 补充无标签姓名、无标题教育恢复、工作/项目 item-level evidence 和核心/可选字段低置信分层。
 
 下一阶段：
 
-- basics fallback：无标签姓名识别。
-- education recovery：无标题教育恢复。
-- item-level evidence：缩短工作和项目 source text。
-- confidence policy：核心字段和可选字段分层。
+- work normalization：处理缺 company 但有岗位和时间的工作经历，继续缩短 work/project raw evidence。
 - correction feedback：人工修正反馈沉淀为 parser regression fixture。
+- 用更多真实脱敏样本回归 vNext 0.4，覆盖导出型 PDF、联系方式后置姓名和无标题教育。
 
 ### 5.6 下一大版本候选
 

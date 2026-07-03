@@ -188,11 +188,15 @@ def _infer_work_project_sections(lines: list[str]) -> tuple[list[str], list[str]
 def _boundary_transition(current: str | None, line: str) -> str | None:
     project_boundary = _looks_like_project_boundary(line)
     work_boundary = _looks_like_work_boundary(line)
+    if current in {"work", "project", "self_evaluation", "profile"} and _looks_like_profile_boundary(line):
+        return "profile"
+    if current in {"work", "project", "self_evaluation", "profile"} and _looks_like_education_summary_boundary(line):
+        return "education"
     if current == "work" and project_boundary:
         return "project"
     if current == "project" and _looks_like_company_work_header(line) and not project_boundary:
         return "work"
-    if current == "self_evaluation":
+    if current in {"self_evaluation", "profile"}:
         if project_boundary:
             return "project"
         if work_boundary:
@@ -202,6 +206,23 @@ def _boundary_transition(current: str | None, line: str) -> str | None:
 
 def _looks_like_project_boundary(line: str) -> bool:
     return _looks_like_project_heading(line) or _looks_like_project_header(line)
+
+
+def _looks_like_profile_boundary(line: str) -> bool:
+    return bool(
+        re.search(r"(?<!\d)1[3-9]\d{9}(?!\d)", line)
+        or re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", line)
+        or re.search(r"\b\d{1,2}岁\b", line)
+        or re.search(r"(求职意向|期望城市|工作经验)", line)
+    )
+
+
+def _looks_like_education_summary_boundary(line: str) -> bool:
+    return bool(
+        re.search(r"(大学|学院|学校)", line)
+        and re.search(r"(博士|硕士|研究生|本科|大专|专科)", line)
+        and _date_range_search(line)
+    )
 
 
 def _looks_like_work_boundary(line: str) -> bool:

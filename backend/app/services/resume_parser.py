@@ -280,6 +280,13 @@ def _extract_education(lines: list[str]) -> list[dict]:
         parts = _split_compact_line(normalized)
         school = _first_part_matching(parts, ["大学", "学院", "学校"])
         major = _extract_major(parts, school, degree)
+        if items and school and school == items[-1].get("school") and (degree or major or time_range):
+            items[-1]["degree"] = items[-1].get("degree") or degree
+            items[-1]["major"] = items[-1].get("major") or major
+            items[-1]["time_range"] = items[-1].get("time_range") or time_range
+            if len(line) < len(str(items[-1].get("raw") or "")):
+                items[-1]["raw"] = line
+            continue
         if items and school and not degree and not major and not _looks_like_college_only(school):
             if not items[-1].get("degree"):
                 items[-1] = {
@@ -321,38 +328,85 @@ def _extract_education(lines: list[str]) -> list[dict]:
 
 def _extract_unheaded_education(lines: list[str]) -> list[dict]:
     candidates: list[str] = []
-    skip_section: str | None = None
-    skipped_sections = {
-        "work",
-        "project",
-        "skills",
-        "campus",
-        "certifications",
-        "languages",
-        "awards",
-        "self_evaluation",
-    }
+    groups: list[list[str]] = []
+    current_group: list[str] = []
     for line in lines:
-        current_section = section_key(line)
-        if current_section:
-            skip_section = current_section if current_section in skipped_sections else None
+        if section_key(line):
+            if current_group:
+                groups.append(current_group)
+                current_group = []
             continue
-        if skip_section:
+        current_group.append(line)
+    if current_group:
+        groups.append(current_group)
+
+    for searchable_lines in groups:
+        for index, _line in enumerate(searchable_lines):
+            for window_size in (1, 2, 3):
+                window = searchable_lines[index : index + window_size]
+                if not window:
+                    continue
+                value = " ".join(window)
+                if not YEAR_RANGE_RE.search(value):
+                    continue
+                if _is_unheaded_education_candidate_noise(value):
+                    continue
+                parts = _split_compact_line(value)
+                school = _first_part_matching(parts, ["大学", "学院", "学校"])
+                degree = _first_keyword(EDUCATION_KEYWORDS, value)
+                major = _extract_major(parts, school, degree)
+                if school and (degree or major) and value not in candidates:
+                    candidates.append(value)
+    candidates.sort(key=_education_candidate_sort_key)
+    return _dedupe_education_items(_extract_education(candidates))
+
+
+def _is_unheaded_education_candidate_noise(value: str) -> bool:
+    if re.search(r"(工作岗位|项目角色|项目描述|项目名称|校内外实践|有限公司|实习员工)", value):
+        return True
+    if "大学" in value and re.search(r"(楼|园区|校区|实验室|助理)", value) and not _first_keyword(EDUCATION_KEYWORDS, value):
+        return True
+    return False
+
+
+def _education_candidate_sort_key(value: str) -> tuple[int, int, int]:
+    noise_penalty = 1 if re.search(r"(负责|提升|减少|完成|项目|工作量|业务响应|团队)", value) else 0
+    parts = _split_compact_line(value)
+    signals = sum(
+        bool(item)
+        for item in [
+            _first_match(YEAR_RANGE_RE, value),
+            _first_part_matching(parts, ["大学", "学院", "学校"]),
+            _first_keyword(EDUCATION_KEYWORDS, value),
+            _extract_major(parts, None, None),
+        ]
+    )
+    return noise_penalty, -signals, len(value)
+
+
+def _dedupe_education_items(items: list[dict]) -> list[dict]:
+    results: list[dict] = []
+    seen_indexes: dict[tuple[str | None, str | None, str | None], int] = {}
+    for item in items:
+        key = (item.get("school"), item.get("degree"), item.get("major"))
+        if key in seen_indexes:
+            existing = results[seen_indexes[key]]
+            if not existing.get("time_range") and item.get("time_range"):
+                existing["time_range"] = item.get("time_range")
+            if len(str(item.get("raw") or "")) < len(str(existing.get("raw") or "")):
+                existing["raw"] = item.get("raw")
             continue
-        if not YEAR_RANGE_RE.search(line):
-            continue
-        parts = _split_compact_line(line)
-        school = _first_part_matching(parts, ["大学", "学院", "学校"])
-        degree = _first_keyword(EDUCATION_KEYWORDS, line)
-        if school and degree:
-            candidates.append(line)
-    return _extract_education(candidates)
+        seen_indexes[key] = len(results)
+        results.append(item)
+    return results[:5]
 
 
 def _extract_work_experiences(lines: list[str]) -> list[dict]:
     items = []
     for chunk in split_section_items(lines, item_kind="work"):
-        chunk = _merge_date_only_lines(chunk)
+        chunk = _trim_experience_noise_lines(_merge_date_only_lines(chunk))
+        if not chunk:
+            continue
         line = "；".join(chunk)
         header = chunk[0]
         time_range = _first_match(YEAR_RANGE_RE, line)
@@ -363,6 +417,8 @@ def _extract_work_experiences(lines: list[str]) -> list[dict]:
         header_parts = _split_compact_line(header_without_time)
         company = _extract_company(without_time, parts)
         title = _guess_title(header_parts, company)
+        if not company and items and items[-1].get("company") and (title or time_range):
+            company = items[-1].get("company")
         if not any([company, title, time_range]):
             continue
         if items and not company and time_range and items[-1].get("company") and not items[-1].get("time_range"):
@@ -386,11 +442,17 @@ def _extract_work_experiences(lines: list[str]) -> list[dict]:
 
 def _extract_project_experiences(lines: list[str]) -> list[dict]:
     items = []
-    chunks = split_section_items(lines, item_kind="project")
+    chunks = [
+        chunk
+        for chunk in (_trim_experience_noise_lines(_merge_date_only_lines(chunk)) for chunk in split_section_items(lines, item_kind="project"))
+        if chunk
+    ]
+    chunks = _normalize_project_chunks(chunks)
     for chunk in chunks:
-        chunk = _merge_date_only_lines(chunk)
         text = "；".join(chunk)
         first_line = chunk[0]
+        if _is_profile_contact_line(first_line) or _is_education_summary_line(first_line):
+            continue
         name = _clean_project_name(re.sub(r"^(项目名称|项目)[:：]\s*", "", first_line).strip())
         role = _extract_labeled_value(text, ["项目角色", "工作岗位", "角色"])
         technologies = [skill for skill in _extract_skills(text) if skill]
@@ -404,6 +466,65 @@ def _extract_project_experiences(lines: list[str]) -> list[dict]:
             }
         )
     return items[:8]
+
+
+def _normalize_project_chunks(chunks: list[list[str]]) -> list[list[str]]:
+    normalized = [list(chunk) for chunk in chunks]
+    for index in range(len(normalized) - 1):
+        current = normalized[index]
+        next_chunk = normalized[index + 1]
+        if not (_is_project_title_only_chunk(current) and next_chunk and _looks_like_project_title_line(next_chunk[0])):
+            continue
+        description_indexes = _project_description_indexes(next_chunk)
+        if len(description_indexes) < 2:
+            continue
+        first_description = description_indexes[0]
+        second_description = description_indexes[1]
+        normalized[index] = [*current, *next_chunk[first_description:second_description]]
+        normalized[index + 1] = [next_chunk[0], *next_chunk[second_description:]]
+    return [chunk for chunk in normalized if chunk]
+
+
+def _is_project_title_only_chunk(chunk: list[str]) -> bool:
+    return len(chunk) == 1 and _looks_like_project_title_line(chunk[0])
+
+
+def _looks_like_project_title_line(line: str) -> bool:
+    clean = line.strip()
+    if _is_profile_contact_line(clean) or _is_education_summary_line(clean):
+        return False
+    return bool(YEAR_RANGE_RE.search(clean) and _guess_title(_split_compact_line(clean), None))
+
+
+def _project_description_indexes(chunk: list[str]) -> list[int]:
+    return [index for index, line in enumerate(chunk) if re.fullmatch(r"项目(?:描述|概况|简介)[:：]?", line.strip())]
+
+
+def _trim_experience_noise_lines(lines: list[str]) -> list[str]:
+    results: list[str] = []
+    for line in lines:
+        if _is_profile_contact_line(line) or _is_education_summary_line(line):
+            break
+        results.append(line)
+    return results
+
+
+def _is_profile_contact_line(line: str) -> bool:
+    return bool(
+        PHONE_RE.search(line)
+        or EMAIL_RE.search(line)
+        or re.search(r"\b\d{1,2}岁\b", line)
+        or re.search(r"(求职意向|期望城市|工作经验)", line)
+    )
+
+
+def _is_education_summary_line(line: str) -> bool:
+    parts = _split_compact_line(line)
+    return bool(
+        _first_part_matching(parts, ["大学", "学院", "学校"])
+        and _first_keyword(EDUCATION_KEYWORDS, line)
+        and YEAR_RANGE_RE.search(line)
+    )
 
 
 def _merge_date_only_lines(lines: list[str]) -> list[str]:
@@ -474,6 +595,45 @@ def _extract_name_from_text(lines: list[str]) -> str | None:
         match = re.search(r"(?:姓名|候选人)[:：]\s*([\u4e00-\u9fa5A-Za-z·]{2,20})", line)
         if match:
             return match.group(1)
+
+    search_lines = lines[:40]
+    for index, line in enumerate(search_lines):
+        if not _looks_like_demographic_line(line):
+            continue
+        for next_line in search_lines[index + 1 : index + 4]:
+            candidate = _clean_unlabeled_name_candidate(next_line)
+            if candidate:
+                return candidate
+
+    for line in search_lines:
+        candidate = _clean_unlabeled_name_candidate(line)
+        if candidate:
+            return candidate
+    return None
+
+
+def _looks_like_demographic_line(line: str) -> bool:
+    return bool(
+        re.search(r"\b\d{1,2}岁\b", line)
+        or re.search(r"(电话|手机|邮箱|工作年限|工作经验|求职意向|期望城市|年龄)", line)
+        or PHONE_RE.search(line)
+        or EMAIL_RE.search(line)
+    )
+
+
+def _clean_unlabeled_name_candidate(line: str) -> str | None:
+    clean = re.sub(r"\s+", "", line.strip(" ：:|｜,，"))
+    if not clean or section_key(clean):
+        return None
+    if any(token in clean for token in ["电话", "手机", "邮箱", "@", "求职", "简历", "候选人", "工作经验", "项目", "技能"]):
+        return None
+    if re.search(r"\d", clean):
+        return None
+    if re.fullmatch(r"[\u4e00-\u9fa5]{2,4}", clean):
+        return clean
+    stripped = line.strip()
+    if re.fullmatch(r"[A-Za-z][A-Za-z .'-]{1,30}", stripped) and " " in stripped:
+        return stripped
     return None
 
 
@@ -529,7 +689,7 @@ def _looks_like_college_only(value: str | None) -> bool:
 
 
 def _extract_years(file_name: str, sections: dict[str, list[str]], source: str, lines: list[str]) -> tuple[float | None, str | None, float]:
-    explicit_text = "\n".join([file_name, *lines[:8]])
+    explicit_text = "\n".join([file_name, *lines[:40]])
     explicit_matches = _explicit_years_from_text(explicit_text)
     if explicit_matches:
         value, source_text, priority = max(explicit_matches, key=lambda item: (item[2], item[0]))
@@ -637,11 +797,27 @@ def _extract_major(parts: list[str], school: str | None, degree: str | None) -> 
 
 
 def _guess_title(parts: list[str], company: str | None) -> str | None:
-    title_keywords = ["工程师", "开发", "经理", "主管", "专员", "分析师", "产品", "运营", "设计", "实习"]
-    for part in parts:
-        if part != company and any(keyword in part for keyword in title_keywords):
-            return part
-    return None
+    title_weights = {
+        "工程师": 9,
+        "架构师": 9,
+        "分析师": 8,
+        "经理": 7,
+        "主管": 7,
+        "专员": 6,
+        "实习": 5,
+        "产品": 4,
+        "运营": 4,
+        "设计": 4,
+        "开发": 3,
+    }
+    best: tuple[int, int, str] | None = None
+    for index, part in enumerate(parts):
+        if part == company:
+            continue
+        score = max((weight for keyword, weight in title_weights.items() if keyword in part), default=0)
+        if score and (best is None or (score, -index) > (best[0], best[1])):
+            best = (score, -index, part)
+    return best[2] if best else None
 
 
 def _strip_known_parts(value: str, parts: list[str | None]) -> str | None:
@@ -686,9 +862,13 @@ def _low_confidence_fields(candidate_data: dict) -> list[str]:
         "education": candidate_data.get("education"),
         "work_experiences": candidate_data.get("work_experiences"),
         "project_experiences": candidate_data.get("project_experiences"),
-        "certifications": candidate_data.get("certifications"),
     }
-    return [field_name for field_name, value in fields.items() if value in (None, "", [])]
+    missing = [field_name for field_name, value in fields.items() if value in (None, "", [])]
+    if "phone" in missing and "email" not in missing:
+        missing.remove("phone")
+    if "email" in missing and "phone" not in missing:
+        missing.remove("email")
+    return missing
 
 
 def _merge_list_values(rule_values: list, ai_values: list, field: str) -> list:

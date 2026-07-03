@@ -47,6 +47,14 @@
 - `project` 遇到明确公司/岗位头时可切回 work。
 - `split_section_items(lines, item_kind=...)` 区分 work 和 project：project 可按编号项目标题拆分，work 不把编号职责误拆成多条经历。
 
+### vNext 0.4
+
+- basics fallback：支持无 `姓名` 标签、导出型 PDF、文件名不可用时，从简历头部无标签姓名行恢复候选人姓名。
+- education recovery：无 `教育经历` 标题时，支持在 1-3 行窗口内组合时间、学校、学历和专业恢复教育经历。
+- item-level evidence：为 work/project 生成 `section:work:item:rules` 和 `section:projects:item:rules` 候选，source text 控制在 260 字以内。
+- confidence policy：低置信字段按核心字段优先，`certifications` 等可选增强字段不再因缺失进入低置信列表或质量扣分。
+- 新增 `exported_pdf_layout` 和 `exported_pdf_contact_name` fixtures，覆盖导出型 PDF 布局、无标签姓名、多行无标题教育、联系方式后置姓名和 item evidence。
+
 ## 真实样本 E2E
 
 测试岗位：
@@ -64,22 +72,19 @@ vNext 0.3 结果：
 
 ## 当前缺陷清单
 
-1. Case A work description 仍偏长，需要进一步把职责证据和项目证据拆短。
-2. Case A project 已按编号拆分，但单个 project source text 仍可能过长。
-3. Case B name 缺失，需要支持导出型 PDF 中无标签姓名识别。
-4. Case B education 结构化缺失，需要支持无标题教育恢复。
-5. Case B 有一条 work item 没有 company，需要后续 work normalization。
-6. `certifications` 等可选字段低置信提示过强，应和核心必填字段区分。
+1. Case A work description 仍可能偏长；vNext 0.4 已生成 item-level source text，但项目条目证据还需继续观察 HR 是否容易判断。
+2. Case B name、structured education、教育 source text、缺 company work item、联系方式/教育污染 project raw、项目标题/描述错位已在真实样本复跑中恢复。
+3. 人工修正反馈尚未沉淀为 parser regression fixture。
+4. 仍需更多真实脱敏样本覆盖不同招聘平台和 PDF 导出布局。
 
 ## 下一步计划
 
 优先级从高到低：
 
-1. basics fallback：无标签姓名、导出型文件名、候选人名位置特征。
-2. education recovery：学校 + 学历 + 专业 + 时间的无标题识别。
-3. item-level evidence：缩短 work/project 的 source text。
-4. confidence policy：核心字段和可选字段分层。
-5. correction feedback：把人工修正动作转成 parser regression fixture。
+1. correction feedback：把人工修正动作转成 parser regression fixture。
+2. 继续补真实脱敏样本回归，重点覆盖导出型 PDF、无标题教育、长项目经历和联系方式后置布局。
+3. evidence display：继续提高 source text 的 HR 可读性和原文定位稳定性。
+4. 观察 Case A project item evidence，必要时继续细化项目条目摘要和 source text。
 
 ## 回归命令
 

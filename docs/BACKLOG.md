@@ -22,14 +22,14 @@
 - vNext 已有 section prompts、parse run、blocks、field candidates、source text。
 - 候选人详情页和修正页已接入证据闭环。
 - `resume-parser-vnext-0.3` 已修复 work/project/self-evaluation section 边界问题。
+- `resume-parser-vnext-0.4` 已补充 basics fallback、education recovery、item-level evidence 和 low-confidence policy 分层。
 
 下一步候选：
 
-- basics fallback：支持无 `姓名` 标签、导出型 PDF、文件名不可用时的姓名识别。
-- education recovery：支持无标题教育经历中学校、学历、专业、时间的恢复。
-- item-level evidence：工作职责和项目条目拆成更短 source text。
-- low-confidence policy：区分必填核心字段和可选增强字段，避免证书等可选项过度影响质量。
+- work normalization：处理缺 company 但有岗位和时间的经历，并继续缩短 work/project raw evidence。
+- 用更多真实脱敏样本验证 vNext 0.4，特别是导出型 PDF、联系方式后置姓名、无标题教育和长项目经历。
 - correction feedback：把人工修正来源转为后续 parser 回归样本。
+- evidence display 文案和定位继续优化，让 HR 更容易判断候选字段。
 
 归属：
 

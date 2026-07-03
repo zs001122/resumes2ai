@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -7,7 +8,7 @@ from app.core.config import settings
 from app.services.resume_parser import ParsedResume, parse_resume_text_with_ai
 from app.services.resume_sections import normalized_lines, section_blocks
 
-PARSER_VERSION = "resume-parser-vnext-0.3"
+PARSER_VERSION = "resume-parser-vnext-0.4"
 
 BASIC_FIELDS = [
     "name",
@@ -24,6 +25,19 @@ SECTION_FIELD_SOURCES = {
     "education": "education",
     "work_experiences": "work",
     "project_experiences": "project",
+}
+ITEM_LEVEL_FIELDS = {"work_experiences", "project_experiences"}
+LOW_CONFIDENCE_WEIGHTS = {
+    "name": 10,
+    "education": 10,
+    "phone": 6,
+    "email": 6,
+    "highest_education": 6,
+    "work_experiences": 5,
+    "project_experiences": 5,
+    "years_of_experience": 4,
+    "current_title": 3,
+    "city": 2,
 }
 LOW_CONFIDENCE_EXTRACTOR = {
     "name": "section:basics:rules",
@@ -224,6 +238,23 @@ def _build_section_field_candidates(
                     rejection_reason=None if confidence >= 0.5 else "low_confidence",
                 )
             )
+            if field_name in ITEM_LEVEL_FIELDS and isinstance(value, list):
+                for item in value:
+                    if not isinstance(item, dict):
+                        continue
+                    item_source = _item_source_text(item, document.source)
+                    item_confidence = _section_confidence(source_confidence.get(field_name), 0.66, item_source)
+                    candidates.append(
+                        FieldCandidateRecord(
+                            field_name=field_name,
+                            value_json=[item],
+                            source_text=item_source,
+                            extractor=f"section:{_extractor_section_name(block_type)}:item:rules",
+                            confidence=item_confidence,
+                            selected=item_confidence >= 0.5,
+                            rejection_reason=None if item_confidence >= 0.5 else "low_confidence",
+                        )
+                    )
 
     return candidates
 
@@ -261,7 +292,7 @@ def _quality_warnings(parsed_resume: ParsedResume, blocks: list[ResumeBlockRecor
         warnings.append("未结构化出项目经历")
     if not data.get("work_experiences"):
         warnings.append("未结构化出工作经历")
-    if not any(block.block_type == "education" for block in blocks):
+    if not data.get("education") and not any(block.block_type == "education" for block in blocks):
         warnings.append("未识别到教育经历段落")
     return warnings
 
@@ -273,7 +304,7 @@ def _quality_score(
 ) -> float:
     data = parsed_resume.candidate_data
     score = 100.0
-    score -= min(40, len(data.get("low_confidence_fields") or []) * 8)
+    score -= min(40, sum(LOW_CONFIDENCE_WEIGHTS.get(field, 2) for field in data.get("low_confidence_fields") or []))
     if not data.get("phone") and not data.get("email"):
         score -= 12
     if not data.get("education"):
@@ -321,14 +352,30 @@ def _section_value_source(
     if isinstance(value, list) and value:
         first = value[0]
         if isinstance(first, dict):
-            raw = first.get("raw") or first.get("description") or first.get("name")
-            if isinstance(raw, str) and raw.strip():
-                return raw
+            source = _item_source_text(first, full_text)
+            if source:
+                return source
         if isinstance(first, str) and first.strip():
             return first
     if block and block.text:
         return block.text[:1200]
     return _source_text_for_value(full_text, value, None)
+
+
+def _item_source_text(item: dict[str, Any], full_text: str, max_chars: int = 260) -> str | None:
+    raw = item.get("raw") or item.get("description") or item.get("name")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    parts = [part.strip() for part in re.split(r"[；;]\s*", raw) if part.strip()]
+    for size in (3, 2, 1):
+        candidate = "\n".join(parts[:size])
+        if candidate and len(candidate) <= max_chars and candidate in full_text:
+            return candidate
+    for part in parts:
+        if part and part in full_text:
+            return part[:max_chars]
+    compact = raw.strip()
+    return compact[:max_chars] if compact else None
 
 
 def _source_text_for_value(full_text: str, value: Any, fallback: str | None) -> str | None:

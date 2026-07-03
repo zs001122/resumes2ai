@@ -1,0 +1,30 @@
+{
+  "file_name": "resume_export_2026.pdf",
+  "name": "张伟",
+  "phone": "13900139001",
+  "email": "zhangwei@example.com",
+  "city": "深圳",
+  "years_of_experience": 3.0,
+  "skills_any": [
+    "Python",
+    "FastAPI",
+    "Redis",
+    "Docker"
+  ],
+  "education_count": 1,
+  "work_count": 1,
+  "project_count": 1,
+  "low_confidence_absent": [
+    "name",
+    "education",
+    "certifications"
+  ],
+  "required_candidate_extractors": [
+    "section:basics:rules",
+    "section:education:rules",
+    "section:work:rules",
+    "section:work:item:rules",
+    "section:projects:rules",
+    "section:projects:item:rules"
+  ]
+}
