@@ -2,6 +2,38 @@
 
 本文档按时间追加项目关键开发、实验、修复和文档重构记录。它不是完整 git log，而是便于后续回顾决策背景、验收结果和遗留问题的开发日志。
 
+## 2026-07-03 - correction feedback loop
+
+Branch: `experiment/resume-parse-vnext`
+Commit: pending
+
+背景：
+
+vNext 0.4 已完成 Case B 的姓名、教育、work company 和 project 串联修复。下一步需要把 HR 在修正页套用 vNext 候选的动作沉淀到 correction log，并提供轻量方式把真实样本转成 parser regression fixture。
+
+变更：
+
+- 修正页保存时提交 `correction_sources`，只包含仍保持候选值的字段。
+- 用户手动编辑字段时会清除该字段的 vNext 套用痕迹，避免误标来源。
+- 后端不改数据库结构，复用 `FieldCorrectionLog.editor_id` 记录来源：`local` 或 `vnext:<extractor>@<confidence>`。
+- 修改记录 UI 展示“来自 vNext 候选”徽标。
+- 新增 `backend/scripts/export_resume_parse_fixture.py`，可从 PDF/DOCX/TXT 导出 vNext fixture 的 `.txt` 和 `.expected.json`。
+
+验收：
+
+- 新增后端测试覆盖 correction log 的 vNext 来源记录。
+- `./venv/bin/python -m pytest -q`：24 passed，1 warning。
+- `npm run lint`：通过。
+- `./venv/bin/python scripts/export_resume_parse_fixture.py ...`：真实 Case B 试跑成功，输出 expected JSON 覆盖 name、education、work/project count 和 raw exclude。
+
+遗留问题：
+
+- correction log 仍是字段级来源记录，尚未把人工修正自动转成 fixture，需要人工执行导出脚本并补关键断言。
+
+下一步：
+
+- 用真实样本或修正结果跑一次 fixture 导出脚本，并补充到 parser regression。
+
 ## 2026-07-03 - resume parser vNext 0.4 project item normalization
 
 Branch: `experiment/resume-parse-vnext`

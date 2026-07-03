@@ -694,8 +694,9 @@ def update_candidate(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="候选人不存在")
 
     resume_file_id = _latest_resume_file_id(repository, candidate_id)
+    correction_sources = payload.correction_sources or {}
     logs: list[FieldCorrectionLog] = []
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    for key, value in payload.model_dump(exclude_unset=True, exclude={"correction_sources"}).items():
         old_value = getattr(candidate, key)
         if old_value == value:
             continue
@@ -707,7 +708,7 @@ def update_candidate(
                 field_name=key,
                 old_value=_stringify(old_value),
                 new_value=_stringify(value),
-                editor_id="local",
+                editor_id=_correction_editor_id(key, correction_sources),
             )
         )
 
@@ -1036,6 +1037,18 @@ def _preview_from_resume_file(resume_file: ResumeFile) -> ResumePreview:
 def _latest_resume_file_id(repository: ResumeRepository, candidate_id: str) -> str | None:
     resume_file = repository.get_latest_resume_file_for_candidate(candidate_id)
     return resume_file.id if resume_file else None
+
+
+def _correction_editor_id(field_name: str, correction_sources: dict) -> str:
+    source = correction_sources.get(field_name)
+    if not source:
+        return "local"
+    extractor = getattr(source, "extractor", None)
+    if not extractor:
+        return "local"
+    confidence = getattr(source, "confidence", None)
+    suffix = f"@{confidence:.2f}" if isinstance(confidence, int | float) else ""
+    return f"vnext:{extractor}{suffix}"[:120]
 
 
 def _stringify(value) -> str | None:

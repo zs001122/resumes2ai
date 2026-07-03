@@ -117,6 +117,39 @@ def create_job(test_client: TestClient, title: str = "软件开发实习生") ->
     return response.json()["id"]
 
 
+def test_candidate_correction_log_records_vnext_source(client):
+    job_id = create_job(client)
+    upload_response = upload_text(client, job_id, "candidate.txt", RESUME_ONE)
+    assert upload_response.status_code == 201
+    candidate_id = upload_response.json()["candidate"]["id"]
+
+    response = client.patch(
+        f"/api/candidates/{candidate_id}",
+        json={
+            "name": "陈晓明",
+            "city": "佛山",
+            "correction_sources": {
+                "name": {
+                    "candidate_id": "field-candidate-1",
+                    "extractor": "section:basics:rules",
+                    "confidence": 0.91,
+                    "source_text": "陈晓明",
+                }
+            },
+        },
+    )
+    assert response.status_code == 200
+
+    logs_response = client.get(f"/api/candidates/{candidate_id}/correction-logs")
+    assert logs_response.status_code == 200
+    logs = logs_response.json()
+    name_log = next(log for log in logs if log["field_name"] == "name")
+    city_log = next(log for log in logs if log["field_name"] == "city")
+    assert name_log["new_value"] == "陈晓明"
+    assert name_log["editor_id"] == "vnext:section:basics:rules@0.91"
+    assert city_log["editor_id"] == "local"
+
+
 def test_resume_parser_extracts_rich_structured_fields():
     parsed = parse_resume_text(
         "数据开发-王小明.txt",

@@ -95,6 +95,20 @@ cd backend
 .\venv\Scripts\python.exe scripts\diagnose_resume_parse_match.py --sample-dir ..\简历数据 --job-profile software-intern
 ```
 
+## Fixture 生成
+
+真实样本或人工修正结果需要固化为 parser regression 时，先导出文本和 expected JSON，再手工补充关键断言：
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe scripts\export_resume_parse_fixture.py `
+  --input ..\test_data\sample.pdf `
+  --case-name real_sample_case `
+  --low-confidence-absent name `
+  --low-confidence-absent education `
+  --raw-exclude 手机号或不应串入项目的文本
+```
+
 ## 维护规则
 
 - parser 规则、prompt、fixtures、parse run 结构和真实样本缺陷记录在本文档。

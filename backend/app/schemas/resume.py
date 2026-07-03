@@ -30,6 +30,13 @@ class CandidateRead(BaseModel):
     updated_at: datetime
 
 
+class CorrectionSource(BaseModel):
+    candidate_id: str | None = None
+    extractor: str
+    confidence: float | None = None
+    source_text: str | None = None
+
+
 class CandidateUpdate(BaseModel):
     name: str | None = None
     phone: str | None = None
@@ -48,6 +55,7 @@ class CandidateUpdate(BaseModel):
     awards: list[str] | None = None
     self_evaluation: str | None = None
     low_confidence_fields: list[str] | None = None
+    correction_sources: dict[str, CorrectionSource] | None = None
 
 
 class ResumeFileRead(BaseModel):

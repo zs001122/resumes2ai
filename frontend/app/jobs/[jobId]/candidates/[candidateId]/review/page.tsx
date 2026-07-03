@@ -41,8 +41,10 @@ type HighlightRange = {
 
 type AppliedEvidence = {
   value: string;
+  candidateId: string;
   extractor: string;
   confidence: number | null;
+  sourceText: string | null;
 };
 
 const fieldLabels: Record<keyof EditableForm, string> = {
@@ -146,17 +148,25 @@ export default function CandidateReviewPage() {
 
   function setField(key: keyof EditableForm, value: string) {
     setForm((current) => (current ? { ...current, [key]: value } : current));
+    setAppliedEvidence((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
   }
 
   function applyCandidate(fieldName: keyof EditableForm, candidate: ResumeFieldCandidate) {
     const value = candidateValueForForm(candidate.value_json);
-    setField(fieldName, value);
+    setForm((current) => (current ? { ...current, [fieldName]: value } : current));
     setAppliedEvidence((current) => ({
       ...current,
       [fieldName]: {
         value,
+        candidateId: candidate.id,
         extractor: candidate.extractor,
         confidence: candidate.confidence,
+        sourceText: candidate.source_text,
       },
     }));
     setActiveField(fieldName);
@@ -192,8 +202,9 @@ export default function CandidateReviewPage() {
         languages: splitLines(form.languages),
         awards: splitLines(form.awards),
         self_evaluation: form.self_evaluation || null,
+        correction_sources: correctionSourcesForSubmit(form, appliedEvidence),
       });
-      setMessage("修正已保存；如使用了 vNext 候选，来源已在本页保留用于复核。");
+      setMessage("修正已保存；vNext 候选来源已写入修改记录。");
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -383,6 +394,7 @@ export default function CandidateReviewPage() {
                   {data.correction_logs.slice(0, 8).map((log) => (
                     <div key={log.id} className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
                       {log.field_name}: {log.old_value || "空"} {"->"} {log.new_value || "空"}
+                      <CorrectionSourceBadge editorId={log.editor_id} />
                     </div>
                   ))}
                 </div>
@@ -520,6 +532,29 @@ function FieldCandidateList({
       ))}
     </div>
   );
+}
+
+function correctionSourcesForSubmit(
+  form: EditableForm,
+  appliedEvidence: Partial<Record<keyof EditableForm, AppliedEvidence>>,
+) {
+  const sources: Record<string, { candidate_id: string; extractor: string; confidence: number | null; source_text: string | null }> = {};
+  for (const [fieldName, evidence] of Object.entries(appliedEvidence) as Array<[keyof EditableForm, AppliedEvidence]>) {
+    if (!evidence || form[fieldName] !== evidence.value) continue;
+    sources[fieldName] = {
+      candidate_id: evidence.candidateId,
+      extractor: evidence.extractor,
+      confidence: evidence.confidence,
+      source_text: evidence.sourceText,
+    };
+  }
+  return sources;
+}
+
+function CorrectionSourceBadge({ editorId }: { editorId: string | null }) {
+  if (!editorId?.startsWith("vnext:")) return null;
+  const source = editorId.replace(/^vnext:/, "");
+  return <span className="ml-2 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">来自 vNext 候选 {source}</span>;
 }
 
 function splitLines(value: string) {

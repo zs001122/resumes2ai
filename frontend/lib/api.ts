@@ -30,6 +30,17 @@ export type Job = JobPayload & {
   updated_at: string;
 };
 
+export type CandidateCorrectionSource = {
+  candidate_id?: string | null;
+  extractor: string;
+  confidence?: number | null;
+  source_text?: string | null;
+};
+
+export type CandidateUpdatePayload = Partial<Omit<Candidate, "id" | "created_at" | "updated_at">> & {
+  correction_sources?: Record<string, CandidateCorrectionSource>;
+};
+
 export type Candidate = {
   id: string;
   name: string | null;
@@ -543,7 +554,7 @@ export async function getCandidateReviewData(jobId: string, candidateId: string)
   return requestJson<CandidateReviewData>(`/api/jobs/${jobId}/candidates/${candidateId}/review`);
 }
 
-export async function updateCandidate(candidateId: string, payload: Partial<Candidate>) {
+export async function updateCandidate(candidateId: string, payload: CandidateUpdatePayload) {
   return requestJson<Candidate>(`/api/candidates/${candidateId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
