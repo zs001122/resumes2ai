@@ -56,7 +56,7 @@ export default function DashboardPage() {
   return (
     <WorkspaceShell
       title="工作台总览"
-      description="集中查看开放岗位、待处理候选人、解析与评分异常，把今天最该处理的事项放到前面。"
+      description="按待办、异常和最近活动组织当天工作，优先处理会阻塞筛选闭环的事项。"
       actions={
         <>
           <button onClick={() => void loadDashboard()} className="btn-secondary">
@@ -94,16 +94,16 @@ export default function DashboardPage() {
         </div>
       ) : dashboard ? (
         <div className="space-y-5">
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric icon={BriefcaseBusiness} label="开放岗位" value={dashboard.summary.open_jobs} />
             <Metric icon={Users} label="候选人总数" value={dashboard.summary.total_candidates} />
             <Metric icon={Sparkles} label="高匹配候选人" value={dashboard.summary.high_match_candidates} />
             <Metric icon={Clock3} label="待沟通候选人" value={dashboard.summary.pending_contact_candidates} />
           </section>
 
-          <section className="grid gap-5 lg:grid-cols-[1fr_380px]">
+          <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="panel overflow-hidden">
-              <div className="border-b border-border px-5 py-4">
+              <div className="border-b border-border bg-slate-50/70 px-5 py-4">
                 <h2 className="text-base font-semibold">今日待处理</h2>
               </div>
               {!hasWork ? (
@@ -124,7 +124,7 @@ export default function DashboardPage() {
                     <Link
                       key={todo.key}
                       href={todo.href}
-                      className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-muted/70"
+                      className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-slate-50"
                     >
                       <span className="flex min-w-0 items-center gap-3">
                         <TodoIcon tone={todo.tone} />
@@ -140,7 +140,7 @@ export default function DashboardPage() {
             </div>
 
             <aside className="panel overflow-hidden">
-              <div className="border-b border-border px-5 py-4">
+              <div className="border-b border-border bg-slate-50/70 px-5 py-4">
                 <h2 className="text-base font-semibold">异常概览</h2>
               </div>
               <div className="space-y-3 p-5">
@@ -154,7 +154,7 @@ export default function DashboardPage() {
           </section>
 
           <section className="panel overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
+            <div className="border-b border-border bg-slate-50/70 px-5 py-4">
               <h2 className="text-base font-semibold">最近活动</h2>
             </div>
             {dashboard.recent_activities.length === 0 ? (
@@ -193,12 +193,12 @@ function Metric({
   value: number;
 }) {
   return (
-    <div className="panel px-4 py-4">
+    <div className="panel p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+        <p className="text-xs font-semibold uppercase text-muted-foreground">{label}</p>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-normal">{value}</p>
     </div>
   );
 }
@@ -211,7 +211,7 @@ function TodoIcon({ tone }: { tone: string }) {
 
 function AlertRow({ label, value, neutral = false }: { label: string; value: number; neutral?: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+    <div className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2">
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className={neutral || value === 0 ? "text-sm font-semibold" : "text-sm font-semibold text-red-600"}>
         {value}

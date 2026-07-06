@@ -3,17 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --background: 210 20% 98%;
-  --foreground: 222 28% 11%;
-  --muted: 210 24% 94%;
-  --muted-foreground: 215 13% 41%;
-  --primary: 204 82% 31%;
+  --background: 210 24% 97%;
+  --foreground: 222 30% 10%;
+  --muted: 210 22% 93%;
+  --muted-foreground: 215 12% 39%;
+  --primary: 193 84% 28%;
   --primary-foreground: 0 0% 100%;
-  --border: 214 20% 86%;
+  --border: 214 19% 84%;
   --panel: 0 0% 100%;
-  --success: 152 52% 30%;
-  --warning: 36 88% 38%;
-  --danger: 0 68% 42%;
+  --success: 154 54% 28%;
+  --warning: 38 90% 38%;
+  --danger: 358 68% 42%;
 }
 
 * {
@@ -24,7 +24,20 @@ body {
   margin: 0;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-family: Inter, Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 35%);
+  outline-offset: 2px;
 }
 
 .input {
@@ -47,13 +60,13 @@ body {
   .app-shell {
     min-height: 100vh;
     background:
-      linear-gradient(180deg, hsl(204 34% 96%) 0%, hsl(var(--background)) 280px),
+      linear-gradient(180deg, hsl(195 34% 96%) 0%, hsl(210 24% 97%) 260px),
       hsl(var(--background));
   }
 
   .app-sidebar {
-    border-right: 1px solid hsl(var(--border));
-    background: hsl(222 22% 12%);
+    border-right: 1px solid hsl(215 22% 18%);
+    background: linear-gradient(180deg, hsl(222 24% 12%) 0%, hsl(220 22% 10%) 100%);
     color: hsl(210 30% 94%);
   }
 
@@ -61,7 +74,7 @@ body {
     border: 1px solid hsl(var(--border));
     border-radius: 8px;
     background: hsl(var(--panel));
-    box-shadow: 0 1px 2px hsl(222 20% 20% / 5%);
+    box-shadow: 0 1px 2px hsl(222 20% 20% / 4%), 0 12px 28px hsl(222 26% 18% / 4%);
   }
 
   .btn-primary,
@@ -76,19 +89,29 @@ body {
     padding: 0 14px;
     font-size: 14px;
     font-weight: 600;
-    transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
   }
 
   .btn-primary {
     border: 1px solid hsl(var(--primary));
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
+    box-shadow: 0 1px 2px hsl(var(--primary) / 20%);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: hsl(193 84% 24%);
   }
 
   .btn-secondary {
     border: 1px solid hsl(var(--border));
     background: hsl(var(--panel));
     color: hsl(var(--foreground));
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    border-color: hsl(214 18% 72%);
+    background: hsl(210 28% 98%);
   }
 
   .btn-danger {

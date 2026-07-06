@@ -240,6 +240,16 @@ export default function CandidateReviewPage() {
     () => new Set(data?.candidate.low_confidence_fields ?? []),
     [data?.candidate.low_confidence_fields],
   );
+  const appliedEvidenceEntries = useMemo(() => {
+    if (!form) return [];
+    return (Object.entries(appliedEvidence) as Array<[keyof EditableForm, AppliedEvidence]>).filter(
+      ([fieldName, evidence]) => evidence && form[fieldName] === evidence.value,
+    );
+  }, [appliedEvidence, form]);
+  const persistedVnextLogCount = useMemo(
+    () => data?.correction_logs.filter((log) => log.editor_id?.startsWith("vnext:")).length ?? 0,
+    [data?.correction_logs],
+  );
 
   const highlightRanges = useMemo(() => {
     if (!data) return [];
@@ -294,9 +304,9 @@ export default function CandidateReviewPage() {
           正在加载修正数据
         </div>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[minmax(460px,560px)_minmax(0,1fr)]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(520px,680px)_minmax(420px,1fr)]">
           <form id="candidate-review-form" onSubmit={handleSubmit} className="panel overflow-hidden">
-            <div className="border-b border-border bg-slate-50/80 px-5 py-4">
+            <div className="border-b border-border bg-slate-50/90 px-5 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold">结构化字段</h2>
@@ -346,7 +356,13 @@ export default function CandidateReviewPage() {
             </div>
           </form>
 
-          <section className="space-y-5">
+          <section className="space-y-5 xl:sticky xl:top-5 xl:self-start">
+            <CorrectionFeedbackPanel
+              appliedEntries={appliedEvidenceEntries}
+              persistedVnextLogCount={persistedVnextLogCount}
+              parseRun={parseRun}
+            />
+
             <div className="panel p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -381,7 +397,7 @@ export default function CandidateReviewPage() {
               ) : null}
               <div
                 ref={previewRef}
-                className="mt-4 max-h-[620px] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-sm leading-7 text-foreground"
+                className="mt-4 max-h-[640px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-slate-50 p-4 text-sm leading-7 text-foreground"
               >
                 {renderHighlightedText(data.preview.content, highlightRanges)}
               </div>
@@ -406,6 +422,42 @@ export default function CandidateReviewPage() {
         </div>
       )}
     </WorkspaceShell>
+  );
+}
+
+function CorrectionFeedbackPanel({
+  appliedEntries,
+  persistedVnextLogCount,
+  parseRun,
+}: {
+  appliedEntries: Array<[keyof EditableForm, AppliedEvidence]>;
+  persistedVnextLogCount: number;
+  parseRun: ResumeParseRun | null;
+}) {
+  return (
+    <div className="panel p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold">修正来源</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {parseRun ? `${appliedEntries.length} 个待保存候选，${persistedVnextLogCount} 条已写入记录` : "暂无 vNext parse run，按旧修正流程保存"}
+          </p>
+        </div>
+        <ParseRunBadge parseRun={parseRun} />
+      </div>
+      {appliedEntries.length ? (
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {appliedEntries.map(([fieldName, evidence]) => (
+            <div key={fieldName} className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <p className="text-xs font-semibold text-emerald-800">{fieldLabels[fieldName]}</p>
+              <p className="mt-1 truncate text-xs text-emerald-700">
+                {evidence.extractor} / {formatConfidence(evidence.confidence)}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -444,7 +496,7 @@ function ReviewFieldRow({
 }) {
   const sortedCandidates = sortFieldCandidates(candidates);
   return (
-    <div className={lowConfidence ? "bg-amber-50/50 px-5 py-4" : "px-5 py-4"}>
+    <div className={lowConfidence ? "bg-amber-50/60 px-5 py-4" : "px-5 py-4 hover:bg-slate-50/60"}>
       <div className="flex items-start justify-between gap-3">
         <label className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
@@ -476,17 +528,24 @@ function ReviewFieldRow({
           已套用：{appliedEvidence.extractor} / 置信度 {formatConfidence(appliedEvidence.confidence)}
         </p>
       ) : null}
-      <FieldCandidateList candidates={sortedCandidates} onLocate={onLocate} onApply={onApply} />
+      <FieldCandidateList
+        candidates={sortedCandidates}
+        appliedCandidateId={appliedEvidence?.candidateId}
+        onLocate={onLocate}
+        onApply={onApply}
+      />
     </div>
   );
 }
 
 function FieldCandidateList({
   candidates,
+  appliedCandidateId,
   onLocate,
   onApply,
 }: {
   candidates: ResumeFieldCandidate[];
+  appliedCandidateId?: string;
   onLocate: (sourceText?: string | null) => void;
   onApply: (candidate: ResumeFieldCandidate) => void;
 }) {
@@ -495,8 +554,13 @@ function FieldCandidateList({
   }
   return (
     <div className="mt-3 space-y-2">
-      {candidates.slice(0, 4).map((candidate) => (
-        <div key={candidate.id} className="rounded-md border border-border bg-white px-3 py-2">
+      {candidates.slice(0, 4).map((candidate) => {
+        const applied = candidate.id === appliedCandidateId;
+        return (
+          <div
+            key={candidate.id}
+            className={applied ? "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2" : "rounded-md border border-border bg-white px-3 py-2"}
+          >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -507,8 +571,8 @@ function FieldCandidateList({
                 >
                   {candidateValueForDisplay(candidate.value_json) || "空值"}
                 </button>
-                <span className={candidate.selected ? "rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700" : "rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600"}>
-                  {candidate.selected ? "已采用" : "未采用"}
+                <span className={applied ? "rounded bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white" : candidate.selected ? "rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700" : "rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600"}>
+                  {applied ? "本次套用" : candidate.selected ? "已采用" : "未采用"}
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -528,8 +592,9 @@ function FieldCandidateList({
             </div>
           ) : null}
           {candidate.rejection_reason ? <p className="mt-2 text-xs text-amber-700">原因：{candidate.rejection_reason}</p> : null}
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -554,7 +619,11 @@ function correctionSourcesForSubmit(
 function CorrectionSourceBadge({ editorId }: { editorId: string | null }) {
   if (!editorId?.startsWith("vnext:")) return null;
   const source = editorId.replace(/^vnext:/, "");
-  return <span className="ml-2 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">来自 vNext 候选 {source}</span>;
+  return (
+    <span className="mt-1 inline-flex max-w-full rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+      来自 vNext 候选 {source}
+    </span>
+  );
 }
 
 function splitLines(value: string) {

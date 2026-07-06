@@ -55,7 +55,7 @@ export default function JobsPage() {
   return (
     <WorkspaceShell
       title="岗位工作台"
-      description="从岗位开始组织筛选流程，快速查看每个岗位的候选人数量、强匹配数量和待处理情况。"
+      description="按岗位组织上传、解析、评分和候选人流转，快速定位当前最活跃的招聘需求。"
       actions={
         <>
           <button onClick={() => void loadJobs()} className="btn-secondary">
@@ -82,7 +82,7 @@ export default function JobsPage() {
         </Notice>
       ) : null}
 
-      <div className="mb-5 grid gap-3 md:grid-cols-4">
+      <div className="mb-5 grid gap-4 md:grid-cols-4">
         <Stat label="岗位总数" value={stats.total} />
         <Stat label="开放中" value={stats.open} />
         <Stat label="候选人" value={stats.candidates} />
@@ -90,7 +90,7 @@ export default function JobsPage() {
       </div>
 
       <section className="panel overflow-hidden">
-        <div className="border-b border-border px-5 py-4">
+        <div className="border-b border-border bg-slate-50/70 px-5 py-4">
           <h2 className="text-base font-semibold">岗位列表</h2>
         </div>
         {loading ? (
@@ -152,9 +152,9 @@ export default function JobsPage() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="panel px-4 py-3">
-      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
+    <div className="panel p-4">
+      <p className="text-xs font-semibold uppercase text-muted-foreground">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-normal">{value}</p>
     </div>
   );
 }

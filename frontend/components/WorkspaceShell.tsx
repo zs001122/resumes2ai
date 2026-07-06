@@ -38,19 +38,19 @@ export function WorkspaceShell({
   const pathname = usePathname();
 
   return (
-    <main className="app-shell min-h-screen lg:grid lg:grid-cols-[232px_1fr]">
-      <aside className="app-sidebar hidden min-h-screen px-4 py-5 lg:block">
+    <main className="app-shell min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
+      <aside className="app-sidebar hidden min-h-screen px-5 py-5 lg:block">
         <Link href="/" className="flex items-center gap-3 px-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-md bg-white text-sm font-bold text-slate-900">
             R2
           </div>
           <div>
             <p className="text-sm font-semibold">Resumes2AI</p>
-            <p className="text-xs text-slate-400">MVP 工作台</p>
+            <p className="text-xs text-slate-400">招聘初筛工作台</p>
           </div>
         </Link>
 
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-8 space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
@@ -59,7 +59,7 @@ export function WorkspaceShell({
                 key={item.label}
                 href={item.href}
                 className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm transition ${
-                  active ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  active ? "bg-white text-slate-950 shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -70,7 +70,7 @@ export function WorkspaceShell({
         </nav>
 
         <div className="mt-8 rounded-md border border-white/10 bg-white/5 p-3">
-          <p className="text-xs font-semibold text-slate-400">MVP 流程</p>
+          <p className="text-xs font-semibold text-slate-400">主线流程</p>
           <ol className="mt-3 space-y-2 text-xs text-slate-300">
             {workflowItems.map((item, index) => (
               <li key={item} className="flex items-center gap-2">
@@ -84,9 +84,39 @@ export function WorkspaceShell({
         </div>
       </aside>
 
-      <section className="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
+      <div className="border-b border-border bg-white/95 px-4 py-3 shadow-sm lg:hidden">
+        <Link href="/" className="flex min-w-0 items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-900 text-xs font-bold text-white">
+            R2
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">Resumes2AI</p>
+            <p className="truncate text-xs text-muted-foreground">招聘初筛工作台</p>
+          </div>
+        </Link>
+        <nav className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium ${
+                  active ? "border-slate-900 bg-slate-900 text-white" : "border-border bg-white text-muted-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      <section className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 xl:px-10">
         <div className="mx-auto max-w-7xl">
-          <header className="mb-6 border-b border-border pb-5">
+          <header className="mb-6 border-b border-border/80 pb-5">
             {backHref ? (
               <Link href={backHref} className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-4 w-4" />
