@@ -37,8 +37,8 @@
 
 - 保持上传后现有 API 主流程不变。
 - 解析 vNext 只增强 parse run、blocks、field candidates 的质量。
-- 修正日志继续记录 new_value；暂不改数据库结构记录“来自 vNext 候选”的来源。
-- 后续如要把人工修正反馈持久化为 parser training/eval data，需要先进入 backlog 或 parser 模块方案。
+- 修正日志继续记录 new_value；不新增数据库结构，已复用 `FieldCorrectionLog.editor_id` 记录 `local` 或 `vnext:<extractor>@<confidence>` 来源。
+- 后续如要把人工修正反馈自动转成 parser training/eval data，需要先进入 backlog 或 parser 模块方案。
 
 ## 风险点
 

@@ -23,12 +23,13 @@
 - 候选人详情页和修正页已接入证据闭环。
 - `resume-parser-vnext-0.3` 已修复 work/project/self-evaluation section 边界问题。
 - `resume-parser-vnext-0.4` 已补充 basics fallback、education recovery、item-level evidence 和 low-confidence policy 分层。
+- vNext 0.4 已继续完成 work normalization、project item normalization 和 work/project raw 去污染。
+- correction feedback 已接入 correction log，能够记录修正值来自 vNext candidate 还是手工输入。
 
 下一步候选：
 
-- work normalization：处理缺 company 但有岗位和时间的经历，并继续缩短 work/project raw evidence。
-- 用更多真实脱敏样本验证 vNext 0.4，特别是导出型 PDF、联系方式后置姓名、无标题教育和长项目经历。
-- correction feedback：把人工修正来源转为后续 parser 回归样本。
+- 用更多真实脱敏样本验证 vNext 0.4，特别是导出型 PDF、联系方式后置姓名、无标题教育、长项目经历和项目标题/描述错位。
+- 把人工修正结果半自动整理为 parser regression fixture，逐步减少同类错例复发。
 - evidence display 文案和定位继续优化，让 HR 更容易判断候选字段。
 
 归属：

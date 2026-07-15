@@ -45,7 +45,8 @@ cd backend
 
 当前测试数据来源：
 
-- `backend/tests/fixtures/resume_parser_vnext/`：脱敏 parser fixtures。
+- `backend/tests/fixtures/resume_parse_vnext/`：脱敏 parser fixtures 和 expected JSON。
+- `backend/scripts/export_resume_parse_fixture.py`：从 PDF/DOCX/TXT 导出 vNext fixture 草稿，支持 `--redact` 脱敏姓名、手机号和邮箱。
 - `test_data/`：本地真实脱敏样本，已 git ignore，不提交原始简历。
 - `简历数据/`：历史真实样本诊断目录，本地存在时可运行诊断脚本。
 
@@ -54,6 +55,8 @@ cd backend
 - 样本原文不提交。
 - 可提交脱敏文本 fixtures 和 expected JSON。
 - 每次 parser 改动记录关键字段、经历数量、低置信字段和 source text 变化。
+- 真实修正结果进入 fixture 前，需要人工确认 expected JSON，至少覆盖 name、education_count、work_count、project_count、low_confidence_absent 和 raw excludes。
+- 使用 `--redact` 时仍需人工检查 `.txt` 和 `.expected.json`，确认 raw excludes、source text 和文件名不含真实个人联系方式。
 
 ## 验收清单
 

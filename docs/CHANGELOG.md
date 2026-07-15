@@ -2,10 +2,103 @@
 
 本文档按时间追加项目关键开发、实验、修复和文档重构记录。它不是完整 git log，而是便于后续回顾决策背景、验收结果和遗留问题的开发日志。
 
-## 2026-07-03 - correction feedback loop
+## 2026-07-06 - 真实样本回归入口和证据页体验优化
 
 Branch: `experiment/resume-parse-vnext`
 Commit: pending
+
+背景：
+
+质量门禁和文档状态同步后，下一步进入真实样本回归 fixture 扩充和证据页体验优化。现有 `test_data/` 为本地真实 PDF，不适合直接提交原文，需要先提供脱敏导出入口；修正页候选证据也需要更便于 HR 快速判断。
+
+变更：
+
+- `export_resume_parse_fixture.py` 新增 `--redact`，导出前脱敏姓名、手机号、邮箱，并重新解析脱敏文本生成 expected JSON。
+- 脱敏导出会同步处理 `--raw-exclude` 参数，避免 expected JSON 写入原始联系方式。
+- 新增导出脚本脱敏 helper 测试。
+- 修正页候选证据支持展开/收起、复制证据、定位证据。
+- extractor 和 rejection_reason 在修正页转为 HR 更容易理解的文案。
+
+验收：
+
+- `./venv/bin/python -m pytest -q`：27 passed，1 warning。
+- `./venv/bin/ruff check app tests scripts`：通过。
+- `npm run lint`：通过。
+- `npm run build`：通过。
+- `--redact` 对真实 Case B PDF 试跑成功，输出到 `/tmp/resume_parse_fixture_redacted`；原始手机号检查无命中。
+
+遗留问题：
+
+- 脱敏导出仍需要人工复核 expected JSON，确认字段断言和原文片段不会泄露真实个人信息。
+- 原文高亮仍主要依赖 source_text 精确匹配，后续可继续增强空白归一和片段定位。
+
+下一步：
+
+- 基于脱敏导出结果挑选 1-2 个真实样本固化为 repo fixture。
+- 继续优化低置信字段汇总文案和详情页/修正页证据口径一致性。
+
+## 2026-07-06 - 质量门禁和文档状态同步
+
+Branch: `experiment/resume-parse-vnext`
+Commit: pending
+
+背景：
+
+vNext 0.4、correction feedback 和企业 ATS 风格 UI 已经完成并提交，但 ROADMAP、BACKLOG 和模块文档中仍有部分下一步状态停留在旧阶段；同时全量 ruff 增加 scripts 检查后，fixture 导出脚本存在 E402 门禁问题。
+
+变更：
+
+- 修复 `backend/scripts/export_resume_parse_fixture.py` 的 ruff E402 问题，保留 CLI 直接运行能力。
+- 同步 ROADMAP、BACKLOG、parser、frontend、backend 和 testing 模块文档到当前真实开发状态。
+- 将下一阶段收敛为真实样本 regression fixture 扩充和 evidence display 体验优化。
+
+验收：
+
+- `./venv/bin/python -m pytest -q`：24 passed，1 warning。
+- `./venv/bin/ruff check app tests scripts`：通过。
+- `npm run lint`：通过。
+- `npm run build`：通过。
+
+遗留问题：
+
+- 下一阶段仍需要继续补真实脱敏样本，并把人工修正结果半自动沉淀为 parser regression fixture。
+
+下一步：
+
+- 进入真实样本回归 fixture 扩充和证据页体验优化。
+
+## 2026-07-06 - 企业 ATS 风格 UI 优化
+
+Branch: `experiment/resume-parse-vnext`
+Commit: `6340bc7`
+
+背景：
+
+现有前端页面可用但视觉风格不够接近企业 ATS，用户要求在不新增业务功能的前提下优化 UI 风格。
+
+变更：
+
+- 首页、工作台、岗位列表、候选人修正页调整为更克制的信息密度和企业 ATS 风格。
+- 统一页面背景、顶部导航、状态色、表格和表单控件的视觉层级。
+- 保留现有页面路由和业务逻辑，不新增 V2 业务入口。
+
+验收：
+
+- `npm run lint`：通过。
+- `npm run build`：通过。
+
+遗留问题：
+
+- 证据区 source text 的折叠、定位和低置信原因表达仍需要继续优化。
+
+下一步：
+
+- 进入真实样本回归 fixture 扩充和证据页体验优化。
+
+## 2026-07-03 - correction feedback loop
+
+Branch: `experiment/resume-parse-vnext`
+Commit: `93b9d9d`
 
 背景：
 
@@ -37,7 +130,7 @@ vNext 0.4 已完成 Case B 的姓名、教育、work company 和 project 串联�
 ## 2026-07-03 - resume parser vNext 0.4 project item normalization
 
 Branch: `experiment/resume-parse-vnext`
-Commit: pending
+Commit: `2aadf9c`
 
 背景：
 
@@ -70,7 +163,7 @@ Commit: pending
 ## 2026-07-03 - resume parser vNext 0.4 work normalization
 
 Branch: `experiment/resume-parse-vnext`
-Commit: pending
+Commit: `2aadf9c`
 
 背景：
 
@@ -104,7 +197,7 @@ Case B 在 name 和 education 恢复后，仍存在一条有岗位和时间但�
 ## 2026-07-02 - resume parser vNext 0.4 fallback and confidence policy
 
 Branch: `experiment/resume-parse-vnext`
-Commit: pending
+Commit: `2aadf9c`
 
 背景：
 
@@ -140,7 +233,7 @@ Commit: pending
 ## 2026-07-02 - 文档结构重构为路线、记录和模块文档
 
 Branch: `experiment/resume-parse-vnext`
-Commit: pending
+Commit: `ac8f8da`
 
 背景：
 

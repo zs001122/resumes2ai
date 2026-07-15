@@ -202,12 +202,15 @@ AI 简历筛选工作台面向 HR 和招聘负责人，目标是把岗位驱动�
 - 修正页展示候选字段，低置信字段优先，点击候选值可填入表单。
 - `resume-parser-vnext-0.3` 修复 work/project/self-evaluation section 边界。
 - `resume-parser-vnext-0.4` 补充无标签姓名、无标题教育恢复、工作/项目 item-level evidence 和核心/可选字段低置信分层。
+- vNext 0.4 已继续完成 work normalization、project item normalization、work/project raw 去污染和真实 Case B 复跑。
+- correction feedback 已接入修正页和 correction log，可记录字段值来自 vNext candidate 还是手工输入。
+- 企业 ATS 风格 UI 第一版已完成，当前仍保持简历初筛工作台定位，不扩展完整 ATS。
 
 下一阶段：
 
-- work normalization：处理缺 company 但有岗位和时间的工作经历，继续缩短 work/project raw evidence。
-- correction feedback：人工修正反馈沉淀为 parser regression fixture。
-- 用更多真实脱敏样本回归 vNext 0.4，覆盖导出型 PDF、联系方式后置姓名和无标题教育。
+- 用更多真实脱敏样本扩充 vNext regression fixtures，覆盖导出型 PDF、联系方式后置姓名、无标题教育、长工作经历和项目错位。
+- 把真实修正结果半自动沉淀为 parser regression fixture，降低后续 parser 改动回归风险。
+- 继续优化 evidence display，让 source text、低置信原因和候选来源更适合 HR 快速判断。
 
 ### 5.6 下一大版本候选
 

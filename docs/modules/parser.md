@@ -53,7 +53,11 @@
 - education recovery：无 `教育经历` 标题时，支持在 1-3 行窗口内组合时间、学校、学历和专业恢复教育经历。
 - item-level evidence：为 work/project 生成 `section:work:item:rules` 和 `section:projects:item:rules` 候选，source text 控制在 260 字以内。
 - confidence policy：低置信字段按核心字段优先，`certifications` 等可选增强字段不再因缺失进入低置信列表或质量扣分。
-- 新增 `exported_pdf_layout` 和 `exported_pdf_contact_name` fixtures，覆盖导出型 PDF 布局、无标签姓名、多行无标题教育、联系方式后置姓名和 item evidence。
+- work normalization：有岗位和时间但缺 company 的工作经历会继承相邻明确公司，减少导出型 PDF 拆行导致的结构缺口。
+- work/project raw 去污染：截断联系方式、求职意向、学校/学历/时间等相邻 section 噪声。
+- project item normalization：修复导出型 PDF 中连续项目标题和项目描述错位导致的 raw 串联。
+- correction feedback：修正页套用 vNext 候选后，correction log 复用 `editor_id` 记录 `vnext:<extractor>@<confidence>` 来源。
+- 新增 `exported_pdf_layout`、`exported_pdf_contact_name` 和 `exported_pdf_project_order` fixtures，覆盖导出型 PDF 布局、无标签姓名、多行无标题教育、联系方式后置姓名、item evidence 和项目描述错位。
 
 ## 真实样本 E2E
 
@@ -74,16 +78,16 @@ vNext 0.3 结果：
 
 1. Case A work description 仍可能偏长；vNext 0.4 已生成 item-level source text，但项目条目证据还需继续观察 HR 是否容易判断。
 2. Case B name、structured education、教育 source text、缺 company work item、联系方式/教育污染 project raw、项目标题/描述错位已在真实样本复跑中恢复。
-3. 人工修正反馈尚未沉淀为 parser regression fixture。
-4. 仍需更多真实脱敏样本覆盖不同招聘平台和 PDF 导出布局。
+3. correction feedback 已记录候选来源，但从人工修正结果到 parser regression fixture 仍需要人工执行导出脚本并补关键断言。
+4. 仍需更多真实脱敏样本覆盖不同招聘平台、PDF 导出布局、项目密集型简历和非标准教育布局。
 
 ## 下一步计划
 
 优先级从高到低：
 
-1. correction feedback：把人工修正动作转成 parser regression fixture。
-2. 继续补真实脱敏样本回归，重点覆盖导出型 PDF、无标题教育、长项目经历和联系方式后置布局。
-3. evidence display：继续提高 source text 的 HR 可读性和原文定位稳定性。
+1. 继续补真实脱敏样本回归，重点覆盖导出型 PDF、无标题教育、长工作/项目经历、联系方式后置布局和项目标题/描述错位。
+2. 使用 `export_resume_parse_fixture.py` 把真实修正结果半自动沉淀为 fixture，并手工补充 name、education、work/project count、raw excludes 等关键断言。
+3. evidence display：继续提高 source text 的 HR 可读性、低置信原因表达和原文定位稳定性。
 4. 观察 Case A project item evidence，必要时继续细化项目条目摘要和 source text。
 
 ## 回归命令
@@ -97,17 +101,20 @@ cd backend
 
 ## Fixture 生成
 
-真实样本或人工修正结果需要固化为 parser regression 时，先导出文本和 expected JSON，再手工补充关键断言：
+真实样本或人工修正结果需要固化为 parser regression 时，先导出文本和 expected JSON，再手工补充关键断言。真实 PDF/DOCX 优先使用 `--redact` 输出脱敏 fixture 草稿：
 
 ```powershell
 cd backend
 .\venv\Scripts\python.exe scripts\export_resume_parse_fixture.py `
   --input ..\test_data\sample.pdf `
   --case-name real_sample_case `
+  --redact `
   --low-confidence-absent name `
   --low-confidence-absent education `
   --raw-exclude 手机号或不应串入项目的文本
 ```
+
+导出后必须人工复核 `.txt` 和 `.expected.json`，确认脱敏文本仍能覆盖原错例，同时不包含真实联系方式。
 
 ## 维护规则
 
