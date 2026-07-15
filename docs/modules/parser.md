@@ -79,7 +79,7 @@ vNext 0.3 结果：
 1. Case A work description 仍可能偏长；vNext 0.4 已生成 item-level source text，但项目条目证据还需继续观察 HR 是否容易判断。
 2. Case B name、structured education、教育 source text、缺 company work item、联系方式/教育污染 project raw、项目标题/描述错位已在真实样本复跑中恢复。
 3. correction feedback 已记录候选来源，但从人工修正结果到 parser regression fixture 仍需要人工执行导出脚本并补关键断言。
-4. 仍需更多真实脱敏样本覆盖不同招聘平台、PDF 导出布局、项目密集型简历和非标准教育布局。
+4. 已固化 `real_pdf_python_ai` 和 `real_pdf_exported_boss` 两组真实脱敏 fixture；仍需更多真实脱敏样本覆盖不同招聘平台、PDF 导出布局、项目密集型简历和非标准教育布局。
 
 ## 下一步计划
 

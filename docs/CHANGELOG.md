@@ -2,10 +2,39 @@
 
 本文档按时间追加项目关键开发、实验、修复和文档重构记录。它不是完整 git log，而是便于后续回顾决策背景、验收结果和遗留问题的开发日志。
 
+## 2026-07-15 - 真实样本脱敏 fixture 固化
+
+Branch: `experiment/resume-parse-vnext`
+Commit: 本提交
+
+背景：
+
+`export_resume_parse_fixture.py --redact` 已经具备真实 PDF 脱敏导出能力，需要把当前 `test_data/` 中两份真实样本固化为可提交的 parser regression fixtures，覆盖导出型 PDF 和项目密集型简历。
+
+变更：
+
+- 新增 `real_pdf_python_ai` 脱敏 fixture，覆盖姓名、联系方式、教育、单条工作经历和多项目经历。
+- 新增 `real_pdf_exported_boss` 脱敏 fixture，覆盖导出型 PDF 的无标题姓名、联系方式后置、教育恢复、work company 继承和项目切分。
+- 在固化前额外脱敏真实姓名、手机号、邮箱、学校、公司和客户组织名称。
+
+验收：
+
+- 敏感词扫描：未命中原始姓名、手机号、邮箱、学校、公司和客户组织名称。
+- `./venv/bin/python -m pytest tests/test_resume_parser_vnext.py -q`：9 passed。
+
+遗留问题：
+
+- 仍需继续收集更多招聘平台和不同版式 PDF/DOCX 样本。
+- 脱敏 fixture 仍需人工复核，确认项目内容不包含业务敏感信息。
+
+下一步：
+
+- 继续观察真实上传样本，按 fixture-first 方式修 parser 新错例。
+
 ## 2026-07-06 - 真实样本回归入口和证据页体验优化
 
 Branch: `experiment/resume-parse-vnext`
-Commit: pending
+Commit: `effc841`
 
 背景：
 
@@ -40,7 +69,7 @@ Commit: pending
 ## 2026-07-06 - 质量门禁和文档状态同步
 
 Branch: `experiment/resume-parse-vnext`
-Commit: pending
+Commit: `effc841`
 
 背景：
 

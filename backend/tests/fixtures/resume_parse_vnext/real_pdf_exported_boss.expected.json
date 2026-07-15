@@ -1,0 +1,27 @@
+{
+  "file_name": "直聘简历-未命名 (1).pdf",
+  "name": "李四",
+  "phone": "13800000000",
+  "email": "candidate@example.com",
+  "city": "广州",
+  "years_of_experience": 3.0,
+  "education_count": 1,
+  "work_count": 2,
+  "project_count": 3,
+  "low_confidence_absent": [
+    "education",
+    "name"
+  ],
+  "required_candidate_extractors": [
+    "section:basics:rules",
+    "section:education:rules",
+    "section:projects:item:rules",
+    "section:projects:rules",
+    "section:skills:rules",
+    "section:work:item:rules",
+    "section:work:rules"
+  ],
+  "project_raw_excludes": [
+    "13800000000"
+  ]
+}
